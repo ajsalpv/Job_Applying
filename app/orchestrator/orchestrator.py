@@ -1,0 +1,363 @@
+"""
+Orchestrator - LangGraph workflow for job application pipeline
+"""
+from typing import Dict, Any, List
+from langgraph.graph import StateGraph, END
+from app.orchestrator.state_manager import (
+    WorkflowState,
+    WorkflowStep,
+    create_initial_state,
+    update_state,
+    add_error,
+)
+from app.agents.job_discovery import (
+    linkedin_agent, indeed_agent, naukri_agent,
+    glassdoor_agent, instahyre_agent, cutshort_agent,
+    wellfound_agent, hirist_agent,
+)
+from app.agents.job_scoring import scoring_agent
+from app.agents.resume_generator import resume_agent, cover_letter_agent
+from app.agents.application_assistant import application_agent
+from app.agents.tracking import tracking_agent
+from app.agents.interview_prep import interview_prep_agent
+from app.tools.utils.logger import get_logger
+
+logger = get_logger("orchestrator")
+
+# Map platform names to agents
+PLATFORM_AGENTS = {
+    "linkedin": linkedin_agent,
+    "indeed": indeed_agent,
+    "naukri": naukri_agent,
+    "glassdoor": glassdoor_agent,
+    "instahyre": instahyre_agent,
+    "cutshort": cutshort_agent,
+    "wellfound": wellfound_agent,
+    "hirist": hirist_agent,
+}
+
+
+# ============================================================
+# NODE FUNCTIONS
+# ============================================================
+
+async def discover_jobs(state: WorkflowState) -> WorkflowState:
+    """Node: Discover jobs from all platforms"""
+    logger.info("Starting job discovery")
+    
+    all_jobs = []
+    platforms = state.get("platforms", list(PLATFORM_AGENTS.keys()))
+    keywords = state.get("keywords", "AI Engineer")
+    locations = state.get("locations", ["Bangalore"])
+    
+    # Search each platform
+    for platform in platforms:
+        agent = PLATFORM_AGENTS.get(platform)
+        if not agent:
+            logger.warning(f"Unknown platform: {platform}")
+            continue
+            
+        try:
+            result = await agent.run(keywords=keywords, location=locations[0])
+            
+            if result.success and result.data:
+                jobs = result.data.get("jobs", [])
+                all_jobs.extend(jobs)
+                logger.info(f"Found {len(jobs)} jobs on {platform}")
+                
+        except Exception as e:
+            logger.error(f"Error on {platform}: {e}")
+            state = add_error(state, f"{platform}: {str(e)}")
+    
+    return update_state(state, {
+        "discovered_jobs": all_jobs,
+        "current_step": WorkflowStep.SCORING.value,
+    })
+
+
+async def score_jobs(state: WorkflowState) -> WorkflowState:
+    """Node: Score and filter discovered jobs"""
+    logger.info("Scoring jobs")
+    
+    jobs = state.get("discovered_jobs", [])
+    min_score = state.get("min_score", 70)
+    
+    if not jobs:
+        return update_state(state, {
+            "current_step": WorkflowStep.COMPLETE.value,
+            "errors": state.get("errors", []) + ["No jobs to score"],
+        })
+    
+    try:
+        result = await scoring_agent.run(jobs=jobs, min_score=min_score)
+        
+        if result.success:
+            scored = result.data.get("jobs", [])
+            logger.info(f"Scored {len(jobs)} jobs, {len(scored)} passed filter")
+            
+            return update_state(state, {
+                "scored_jobs": scored,
+                "jobs_for_review": scored,  # All scored jobs need review
+                "current_step": WorkflowStep.HUMAN_REVIEW.value,
+            })
+    
+    except Exception as e:
+        logger.error(f"Scoring error: {e}")
+        return add_error(state, f"Scoring: {str(e)}")
+    
+    return state
+
+
+async def generate_resume_content(state: WorkflowState) -> WorkflowState:
+    """Node: Generate optimized resume content"""
+    logger.info("Generating resume content")
+    
+    approved_urls = state.get("approved_jobs", [])
+    scored_jobs = state.get("scored_jobs", [])
+    
+    # Filter to approved jobs only
+    approved_jobs = [j for j in scored_jobs if j.get("job_url") in approved_urls]
+    
+    if not approved_jobs:
+        logger.info("No approved jobs for resume generation")
+        return update_state(state, {
+            "current_step": WorkflowStep.COMPLETE.value,
+        })
+    
+    try:
+        result = await resume_agent.run(jobs=approved_jobs)
+        
+        if result.success:
+            optimizations = result.data.get("optimizations", [])
+            return update_state(state, {
+                "resume_optimizations": optimizations,
+                "current_step": WorkflowStep.COVER_LETTER_GEN.value,
+            })
+            
+    except Exception as e:
+        logger.error(f"Resume generation error: {e}")
+        return add_error(state, f"Resume: {str(e)}")
+    
+    return state
+
+
+async def generate_cover_letters(state: WorkflowState) -> WorkflowState:
+    """Node: Generate cover letters"""
+    logger.info("Generating cover letters")
+    
+    approved_urls = state.get("approved_jobs", [])
+    scored_jobs = state.get("scored_jobs", [])
+    approved_jobs = [j for j in scored_jobs if j.get("job_url") in approved_urls]
+    
+    if not approved_jobs:
+        return update_state(state, {
+            "current_step": WorkflowStep.APPLICATION_PREP.value,
+        })
+    
+    try:
+        result = await cover_letter_agent.run(jobs=approved_jobs)
+        
+        if result.success:
+            letters = result.data.get("cover_letters", [])
+            return update_state(state, {
+                "cover_letters": letters,
+                "current_step": WorkflowStep.APPLICATION_PREP.value,
+            })
+            
+    except Exception as e:
+        logger.error(f"Cover letter error: {e}")
+        return add_error(state, f"Cover letter: {str(e)}")
+    
+    return state
+
+
+async def prepare_applications(state: WorkflowState) -> WorkflowState:
+    """Node: Prepare application forms (human review required)"""
+    logger.info("Preparing applications")
+    
+    approved_urls = state.get("approved_jobs", [])
+    scored_jobs = state.get("scored_jobs", [])
+    approved_jobs = [j for j in scored_jobs if j.get("job_url") in approved_urls]
+    
+    if not approved_jobs:
+        return update_state(state, {
+            "current_step": WorkflowStep.TRACKING.value,
+        })
+    
+    try:
+        result = await application_agent.run(jobs=approved_jobs)
+        
+        if result.success:
+            preps = result.data.get("preparations", [])
+            return update_state(state, {
+                "prepared_applications": preps,
+                "current_step": WorkflowStep.TRACKING.value,
+            })
+            
+    except Exception as e:
+        logger.error(f"Application prep error: {e}")
+        return add_error(state, f"Application: {str(e)}")
+    
+    return state
+
+
+async def track_applications(state: WorkflowState) -> WorkflowState:
+    """Node: Log applications to tracking sheet"""
+    logger.info("Tracking applications")
+    
+    scored_jobs = state.get("scored_jobs", [])
+    
+    for job in scored_jobs:
+        try:
+            await tracking_agent.log_application(
+                company=job.get("company", ""),
+                role=job.get("role", ""),
+                platform=job.get("platform", ""),
+                job_url=job.get("job_url", ""),
+                fit_score=job.get("fit_score", 0),
+                location=job.get("location", ""),
+                experience_required=job.get("experience_required", ""),
+            )
+        except Exception as e:
+            logger.error(f"Tracking error for {job.get('company')}: {e}")
+    
+    return update_state(state, {
+        "current_step": WorkflowStep.COMPLETE.value,
+    })
+
+
+# ============================================================
+# CONDITIONAL EDGES
+# ============================================================
+
+def should_continue(state: WorkflowState) -> str:
+    """Determine next step based on current state"""
+    step = state.get("current_step", WorkflowStep.INIT.value)
+    
+    if step == WorkflowStep.COMPLETE.value:
+        return "end"
+    elif step == WorkflowStep.HUMAN_REVIEW.value:
+        return "wait_for_review"
+    else:
+        return "continue"
+
+
+def route_after_scoring(state: WorkflowState) -> str:
+    """Route after scoring: to review or end"""
+    scored = state.get("scored_jobs", [])
+    if not scored:
+        return "end"
+    return "human_review"
+
+
+def route_after_review(state: WorkflowState) -> str:
+    """Route after human review"""
+    approved = state.get("approved_jobs", [])
+    if not approved:
+        return "track"  # Still track discovered jobs
+    return "resume"
+
+
+# ============================================================
+# BUILD GRAPH
+# ============================================================
+
+def create_workflow() -> StateGraph:
+    """
+    Create the LangGraph workflow.
+    
+    Flow:
+    1. Discover jobs → 
+    2. Score/filter →
+    3. [PAUSE: Human review] →
+    4. Generate resume →
+    5. Generate cover letters →
+    6. Prepare applications →
+    7. Track
+    """
+    workflow = StateGraph(WorkflowState)
+    
+    # Add nodes
+    workflow.add_node("discover", discover_jobs)
+    workflow.add_node("score", score_jobs)
+    workflow.add_node("resume", generate_resume_content)
+    workflow.add_node("cover_letter", generate_cover_letters)
+    workflow.add_node("prepare", prepare_applications)
+    workflow.add_node("track", track_applications)
+    
+    # Set entry point
+    workflow.set_entry_point("discover")
+    
+    # Add edges
+    workflow.add_edge("discover", "score")
+    workflow.add_conditional_edges(
+        "score",
+        route_after_scoring,
+        {
+            "human_review": END,  # Pause for human review
+            "end": "track",
+        }
+    )
+    workflow.add_edge("resume", "cover_letter")
+    workflow.add_edge("cover_letter", "prepare")
+    workflow.add_edge("prepare", "track")
+    workflow.add_edge("track", END)
+    
+    return workflow
+
+
+# Compiled workflow
+job_workflow = create_workflow().compile()
+
+
+async def run_discovery_phase(
+    keywords: str = "AI Engineer",
+    locations: List[str] = None,
+    platforms: List[str] = None,
+    min_score: int = 70,
+) -> WorkflowState:
+    """
+    Run the discovery and scoring phase.
+    
+    Returns state with jobs ready for human review.
+    """
+    initial_state = create_initial_state(
+        keywords=keywords,
+        locations=locations,
+        platforms=platforms,
+        min_score=min_score,
+    )
+    
+    # Run until human review pause
+    result = await job_workflow.ainvoke(initial_state)
+    
+    return result
+
+
+async def run_application_phase(
+    state: WorkflowState,
+    approved_jobs: List[str],
+) -> WorkflowState:
+    """
+    Continue workflow after human review.
+    
+    Args:
+        state: State from discovery phase
+        approved_jobs: List of job URLs approved by user
+        
+    Returns:
+        Final workflow state
+    """
+    # Update state with approved jobs
+    state = update_state(state, {
+        "approved_jobs": approved_jobs,
+        "current_step": WorkflowStep.RESUME_GEN.value,
+    })
+    
+    # Run remaining phases manually
+    state = await generate_resume_content(state)
+    state = await generate_cover_letters(state)
+    state = await prepare_applications(state)
+    state = await track_applications(state)
+    
+    return state
