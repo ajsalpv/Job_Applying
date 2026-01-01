@@ -205,5 +205,6 @@ class ApplicationAgent(BaseAgent):
             message=f"Prepared {len(preparations)} applications for human review"
         )
 
-
+# Export singleton
 application_agent = ApplicationAgent()
+ApplicationAgentLangGraph = ApplicationAgent

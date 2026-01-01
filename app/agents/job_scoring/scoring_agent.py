@@ -429,3 +429,4 @@ Always use the tools to calculate scores, don't estimate manually."""
 
 # Export as default scoring agent
 scoring_agent = ScoringAgentLangGraph()
+ScoringAgent = ScoringAgentLangGraph

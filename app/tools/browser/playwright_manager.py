@@ -1,7 +1,17 @@
 """
 Playwright Manager - Async browser automation with stealth settings
 """
+import sys
 import asyncio
+
+# Enforce ProactorEventLoop on Windows for Playwright
+if sys.platform == "win32":
+    try:
+        if not isinstance(asyncio.get_event_loop_policy(), asyncio.WindowsProactorEventLoopPolicy):
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    except Exception:
+        pass
+
 from typing import Optional, Dict, Any
 from contextlib import asynccontextmanager
 from playwright.async_api import async_playwright, Browser, Page, BrowserContext

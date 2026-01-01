@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     
     # Logging
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
+
+    # Scheduling
+    check_interval_minutes: float = Field(default=30.0, env="CHECK_INTERVAL_MINUTES")
+
+    # Notifications
+    telegram_bot_token: str = Field(default="8380477714:AAEB790RVdawDIzOWupFl191cbIJ7dH1yqo", env="TELEGRAM_BOT_TOKEN")
+    telegram_chat_id: str = Field(default="1629864542", env="TELEGRAM_CHAT_ID")
     
     # User Profile
     user_name: str = Field(default="Ajsal PV", env="USER_NAME")

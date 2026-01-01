@@ -72,7 +72,14 @@ def api_call(endpoint: str, method: str = "GET", data: Dict = None) -> Dict:
             response = requests.get(url, params=data)
         else:
             response = requests.post(url, json=data)
-        return response.json()
+        
+        # Check if response is JSON
+        if "application/json" in response.headers.get("Content-Type", ""):
+            return response.json()
+        else:
+            st.error(f"Backend Error ({response.status_code}): {response.text[:200]}...")
+            return None
+            
     except requests.exceptions.ConnectionError:
         st.error("⚠️ Cannot connect to backend. Make sure FastAPI server is running.")
         return None
@@ -101,6 +108,26 @@ def render_sidebar():
         col1, col2 = st.sidebar.columns(2)
         col1.metric("Applied", stats.get("total_applied", 0))
         col2.metric("Interviews", stats.get("interviews", 0))
+    
+    st.sidebar.markdown("### ⏰ Scheduler")
+    sched_status = api_call("/scheduler/status")
+    if sched_status:
+        is_running = sched_status.get("running", False)
+        interval = sched_status.get("interval_minutes", 30)
+        
+        status_color = "🟢" if is_running else "🔴"
+        st.sidebar.write(f"Status: {status_color} {'Running' if is_running else 'Stopped'}")
+        st.sidebar.write(f"Interval: {interval} mins")
+        
+        col1, col2 = st.sidebar.columns(2)
+        if is_running:
+            if col1.button("Stop"):
+                api_call("/scheduler/stop", method="POST")
+                st.rerun()
+        else:
+            if col1.button("Start"):
+                api_call("/scheduler/start", method="POST")
+                st.rerun()
     
     return page
 
@@ -238,7 +265,56 @@ def render_applications_page():
                 if st.button(f"Generate Follow-up Email", key=f"followup_{f.get('company')}"):
                     st.info("Follow-up email generation coming soon!")
                 st.divider()
+    # Valid Applications List
+    st.subheader("📝 All Applications")
+    all_apps = api_call("/applications")
     
+    if all_apps and all_apps.get("applications"):
+        apps = all_apps.get("applications", [])
+        
+        # Filter filters (Optional: Add search/filter here)
+        
+        for app in apps:
+            with st.expander(f"{app.get('role')} at {app.get('company')} ({app.get('status')})"):
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    st.markdown(f"**📍 Location:** {app.get('location')}")
+                    st.markdown(f"**📅 Applied:** {app.get('date')}")
+                    st.markdown(f"**🌐 Platform:** {app.get('platform')}")
+                    st.markdown(f"**🔗 URL:** [Link]({app.get('job_url')})")
+                    
+                    if app.get("notes"):
+                        st.info(f"Notes: {app.get('notes')}")
+                        
+                with col2:
+                    st.metric("Fit Score", f"{app.get('fit_score')}%")
+                
+                st.divider()
+                
+                # Interview Prep Section
+                st.markdown("### 🎓 Interview Prep")
+                
+                tab1, tab2, tab3 = st.tabs(["💡 Prep Tips", "📚 Skills to Learn", "📄 Job Description"])
+                
+                with tab1:
+                    if app.get("interview_prep"):
+                        # Parse string representation (it might be raw text or list representation)
+                        st.markdown(app.get("interview_prep"))
+                    else:
+                        st.write("No specific tips generated yet.")
+                        
+                with tab2:
+                    if app.get("skills_to_learn"):
+                        st.markdown(app.get("skills_to_learn"))
+                    else:
+                        st.write("No skill gaps identified.")
+                        
+                with tab3:
+                    st.text(app.get("job_description"))
+                    
+    else:
+        st.info("No applications tracked yet.")
     # Manual content generation
     st.subheader("📝 Generate Application Content")
     
@@ -376,16 +452,27 @@ def render_settings_page():
     st.divider()
     
     st.subheader("🔌 API Configuration")
-    with st.expander("API Settings"):
+    with st.expander("API Settings & Health Check", expanded=True):
         st.text_input("Backend URL", value=API_BASE_URL, disabled=True)
         
         # Test connection
-        if st.button("Test Connection"):
-            result = api_call("/health")
-            if result:
-                st.success(f"✅ Connected: {result}")
+        if st.button("🔍 Run Comprehensive Health Check"):
+            health = api_call("/health")
+            state = api_call("/workflow/state")
+            sched = api_call("/scheduler/status")
+            
+            if health:
+                st.success("✅ Backend is reachable")
+                st.json({
+                    "health": health,
+                    "scheduler": sched,
+                    "workflow": state
+                })
             else:
-                st.error("❌ Cannot connect to backend")
+                st.error("❌ Cannot connect to backend. Please ensure you are running 'python run_server.py'")
+
+        st.info("💡 **Tip for Windows:** If discovery fails with 'NotImplementedError', make sure you are NOT running via 'uvicorn' directly. Use 'python run_server.py' instead.")
+
 
 
 def main():

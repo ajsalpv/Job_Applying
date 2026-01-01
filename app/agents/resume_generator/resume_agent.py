@@ -292,3 +292,4 @@ Use the tools to:
 
 
 resume_agent = ResumeAgentLangGraph()
+ResumeAgent = ResumeAgentLangGraph

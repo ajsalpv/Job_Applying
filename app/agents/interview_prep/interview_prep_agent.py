@@ -312,3 +312,4 @@ Use the available tools to gather information and provide comprehensive guidance
 
 # Export as default
 interview_prep_agent = InterviewPrepAgentLangGraph()
+InterviewPrepAgent = InterviewPrepAgentLangGraph

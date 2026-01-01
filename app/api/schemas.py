@@ -110,3 +110,33 @@ class APIResponse(BaseModel):
     success: bool
     message: str
     data: Optional[Dict[str, Any]] = None
+
+
+class JobApplicationItem(BaseModel):
+    """Application item details"""
+    date: str
+    platform: str
+    company: str
+    role: str
+    location: str
+    fit_score: int
+    status: str
+    job_url: str
+    job_description: str
+    interview_prep: str
+    skills_to_learn: str
+    notes: str
+
+
+class ApplicationListResponse(BaseModel):
+    """List of all applications"""
+    applications: List[JobApplicationItem]
+    count: int
+
+
+class SchedulerStatus(BaseModel):
+    """Scheduler status response"""
+    running: bool
+    interval_minutes: float
+
+

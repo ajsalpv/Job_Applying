@@ -403,7 +403,7 @@ Use your tools intelligently to search, filter, and validate jobs."""
         return create_react_agent(
             model=self.llm,
             tools=self._tools,
-            state_modifier=system_prompt,
+            prompt=system_prompt,
         )
     
     async def discover(

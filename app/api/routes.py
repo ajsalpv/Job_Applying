@@ -16,8 +16,12 @@ from app.api.schemas import (
     FollowUpsResponse,
     FollowUpItem,
     APIResponse,
+    JobApplicationItem,
+    ApplicationListResponse,
+    SchedulerStatus,
 )
 from app.orchestrator import run_discovery_phase, run_application_phase, WorkflowState
+from app.orchestrator.scheduler import scheduler
 from app.agents.job_scoring import scoring_agent
 from app.agents.resume_generator import resume_agent, cover_letter_agent
 from app.agents.tracking import tracking_agent
@@ -32,8 +36,15 @@ _workflow_state: WorkflowState = None
 
 @router.get("/health")
 async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "service": "job-application-agent"}
+    """Health check endpoint with loop info"""
+    import asyncio
+    loop = asyncio.get_running_loop()
+    return {
+        "status": "healthy", 
+        "service": "job-application-agent",
+        "loop": type(loop).__name__
+    }
+
 
 
 @router.post("/jobs/search", response_model=JobSearchResponse)
@@ -229,6 +240,59 @@ async def update_status(request: UpdateStatusRequest):
     except Exception as e:
         logger.error(f"Status update error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/applications", response_model=ApplicationListResponse)
+async def get_all_applications():
+    """Get all applications details"""
+    try:
+        apps = await tracking_agent.get_all_applications()
+        
+        items = []
+        for app in apps:
+            items.append(JobApplicationItem(
+                date=app.date,
+                platform=app.platform,
+                company=app.company,
+                role=app.role,
+                location=app.location,
+                fit_score=app.fit_score,
+                status=app.status.value,
+                job_url=app.job_url,
+                job_description=app.job_description,
+                interview_prep=app.interview_prep,
+                skills_to_learn=app.skills_to_learn,
+                notes=app.notes,
+            ))
+            
+        return ApplicationListResponse(applications=items, count=len(items))
+        
+    except Exception as e:
+        logger.error(f"Get all applications error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/scheduler/status", response_model=SchedulerStatus)
+async def get_scheduler_status():
+    """Get scheduler status"""
+    return SchedulerStatus(
+        running=scheduler._running,
+        interval_minutes=scheduler.settings.check_interval_minutes,
+    )
+
+
+@router.post("/scheduler/start")
+async def start_scheduler():
+    """Start the scheduler"""
+    await scheduler.start()
+    return {"message": "Scheduler started"}
+
+
+@router.post("/scheduler/stop")
+async def stop_scheduler():
+    """Stop the scheduler"""
+    await scheduler.stop()
+    return {"message": "Scheduler stopped"}
 
 
 @router.get("/workflow/state")

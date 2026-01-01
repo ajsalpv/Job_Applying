@@ -12,6 +12,7 @@ from app.config.constants import ApplicationStatus, SHEETS_COLUMNS
 from app.config.settings import get_settings
 from app.tools.sheets import sheets_client, JobApplication, FollowUp
 from app.tools.utils.logger import get_logger
+from app.tools.notifications.telegram_notifier import notifier
 
 
 # ============================================================
@@ -32,7 +33,7 @@ def log_new_application(
     skills_to_learn: str = "",
 ) -> Dict[str, Any]:
     """
-    Log a new job application to tracking sheet.
+    Log a new job application to tracking sheet and notify user.
     
     Args:
         company: Company name
@@ -67,6 +68,17 @@ def log_new_application(
         )
         
         sheets_client.add_application(application)
+        
+        # Send notification
+        msg = (
+            f"🎯 *New Job Found!*\n"
+            f"🏢 *{company}*\n"
+            f"👨‍💻 {role}\n"
+            f"📍 {location}\n"
+            f"⭐ Fit: {fit_score}%\n"
+            f"🔗 [View Job]({job_url})"
+        )
+        notifier.send_notification(msg)
         
         return {
             "success": True,
@@ -474,6 +486,10 @@ Use the tools to manage the application pipeline effectively."""
             "notes": notes,
         })
         return result.get("success", False)
+
+    async def get_all_applications(self) -> List[JobApplication]:
+        """Get all applications"""
+        return sheets_client.get_all_applications()
     
     async def get_statistics(self) -> Dict[str, Any]:
         """Get tracking statistics"""
@@ -519,3 +535,4 @@ Use the tools to manage the application pipeline effectively."""
 
 # Export singleton
 tracking_agent = TrackingAgentLangGraph()
+TrackingAgent = TrackingAgentLangGraph

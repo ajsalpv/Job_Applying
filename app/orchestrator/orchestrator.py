@@ -46,9 +46,14 @@ async def discover_jobs(state: WorkflowState) -> WorkflowState:
     logger.info("Starting job discovery")
     
     all_jobs = []
+    # Parse multiple keywords and locations
     platforms = state.get("platforms", list(PLATFORM_AGENTS.keys()))
-    keywords = state.get("keywords", "AI Engineer")
+    raw_keywords = state.get("keywords", "AI Engineer")
+    keywords_list = [k.strip() for k in raw_keywords.split(",")] if "," in raw_keywords else [raw_keywords]
     locations = state.get("locations", ["Bangalore"])
+    
+    # Track seen job URLs to avoid duplicates
+    seen_urls = set()
     
     # Search each platform
     for platform in platforms:
@@ -57,17 +62,30 @@ async def discover_jobs(state: WorkflowState) -> WorkflowState:
             logger.warning(f"Unknown platform: {platform}")
             continue
             
-        try:
-            result = await agent.run(keywords=keywords, location=locations[0])
-            
-            if result.success and result.data:
-                jobs = result.data.get("jobs", [])
-                all_jobs.extend(jobs)
-                logger.info(f"Found {len(jobs)} jobs on {platform}")
-                
-        except Exception as e:
-            logger.error(f"Error on {platform}: {e}")
-            state = add_error(state, f"{platform}: {str(e)}")
+        for location in locations:
+            for keyword in keywords_list:
+                try:
+                    logger.info(f"Searching {platform} for '{keyword}' in {location}")
+                    result = await agent.run(keywords=keyword, location=location)
+                    
+                    if result.success and result.data:
+                        jobs = result.data.get("jobs", [])
+                        new_jobs = []
+                        for job in jobs:
+                            url = job.get("job_url")
+                            if url and url not in seen_urls:
+                                seen_urls.add(url)
+                                new_jobs.append(job)
+                        
+                        all_jobs.extend(new_jobs)
+                        logger.info(f"Adding {len(new_jobs)} new jobs from {platform} ({keyword} in {location})")
+                        
+                except Exception as e:
+                    logger.error(f"Error on {platform} for {keyword} in {location}: {e}")
+                    # Don't add to state.errors for every single failure to avoid bloat
+                    # but log it.
+    
+    logger.info(f"Total discovery complete: {len(all_jobs)} unique jobs found")
     
     return update_state(state, {
         "discovered_jobs": all_jobs,
@@ -288,20 +306,13 @@ def create_workflow() -> StateGraph:
     # Set entry point
     workflow.set_entry_point("discover")
     
-    # Add edges
     workflow.add_edge("discover", "score")
-    workflow.add_conditional_edges(
-        "score",
-        route_after_scoring,
-        {
-            "human_review": END,  # Pause for human review
-            "end": "track",
-        }
-    )
+    workflow.add_edge("score", "track")
     workflow.add_edge("resume", "cover_letter")
     workflow.add_edge("cover_letter", "prepare")
     workflow.add_edge("prepare", "track")
     workflow.add_edge("track", END)
+
     
     return workflow
 

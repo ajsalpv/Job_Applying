@@ -237,3 +237,5 @@ Use the tools to analyze the company and match skills before generating."""
 
 
 cover_letter_agent = CoverLetterAgentLangGraph()
+# Export as default cover letter agent
+CoverLetterAgent = CoverLetterAgentLangGraph

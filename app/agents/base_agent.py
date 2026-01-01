@@ -67,20 +67,25 @@ Think step by step and explain your reasoning."""
         Add a tool to this agent.
         
         Args:
-            func: The function to wrap as a tool
+            func: The function to wrap as a tool or an existing BaseTool
             name: Tool name (defaults to function name)
             description: Tool description
             
         Returns:
             The wrapped tool
         """
-        wrapped_tool = StructuredTool.from_function(
-            func=func,
-            name=name or func.__name__,
-            description=description or func.__doc__ or "No description",
-        )
+        if isinstance(func, BaseTool):
+            wrapped_tool = func
+        else:
+            wrapped_tool = StructuredTool.from_function(
+                func=func,
+                name=name or getattr(func, "__name__", "tool"),
+                description=description or getattr(func, "__doc__", "No description"),
+            )
+            
         self._tools.append(wrapped_tool)
-        self.logger.debug(f"Added tool: {wrapped_tool.name}")
+        tool_name = getattr(wrapped_tool, "name", "unknown")
+        self.logger.debug(f"Added tool: {tool_name}")
         return wrapped_tool
     
     def get_tools(self) -> List[BaseTool]:
@@ -95,7 +100,7 @@ Think step by step and explain your reasoning."""
         agent = create_react_agent(
             model=llm,
             tools=self._tools,
-            state_modifier=self._system_prompt,
+            prompt=self._system_prompt,
         )
         
         return agent

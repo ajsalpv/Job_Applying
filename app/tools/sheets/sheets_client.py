@@ -84,8 +84,13 @@ class SheetsClient:
     
     @sheets_retry
     def add_application(self, application: JobApplication) -> bool:
-        """Add a new application record"""
+        """Add a new application record with duplicate check"""
         try:
+            # Check for duplicate URL
+            if self.check_duplicate(application.job_url):
+                logger.debug(f"Skipping duplicate application: {application.job_url}")
+                return False
+                
             sheet = self.get_applications_sheet()
             sheet.append_row(application.to_row())
             logger.info(f"Added application: {application.company} - {application.role}")

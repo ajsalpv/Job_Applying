@@ -1,12 +1,21 @@
 """
 Main FastAPI Application Entry Point
 """
+import sys
+import asyncio
+
+# Enforce ProactorEventLoop on Windows for Playwright
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.api.routes import router
+from app.config.settings import get_settings
 from app.tools.browser import playwright_manager
 from app.tools.utils.logger import get_logger
+from app.orchestrator.scheduler import scheduler
 
 logger = get_logger("main")
 
@@ -14,10 +23,20 @@ logger = get_logger("main")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    logger.info("🚀 Starting AI Job Application Agent")
+    loop = asyncio.get_running_loop()
+    logger.info(f"🚀 Starting AI Job Application Agent. Active Event Loop: {type(loop).__name__}")
+    
+    if sys.platform == "win32" and not isinstance(loop, asyncio.ProactorEventLoop):
+        logger.warning("🚨 REQUIRED ProactorEventLoop is NOT active! Playwright will fail.")
+
+    
+    # Start background scheduler
+    await scheduler.start()
+    
     yield
     # Cleanup on shutdown
     logger.info("🛑 Shutting down...")
+    await scheduler.stop()
     await playwright_manager.close()
 
 
