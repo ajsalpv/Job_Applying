@@ -1,6 +1,7 @@
 """
 Orchestrator - LangGraph workflow for job application pipeline
 """
+import asyncio
 from typing import Dict, Any, List
 from langgraph.graph import StateGraph, END
 from app.orchestrator.state_manager import (
@@ -42,10 +43,9 @@ PLATFORM_AGENTS = {
 # ============================================================
 
 async def discover_jobs(state: WorkflowState) -> WorkflowState:
-    """Node: Discover jobs from all platforms"""
-    logger.info("Starting job discovery")
+    """Node: Discover jobs from all platforms in parallel"""
+    logger.info("Starting parallel job discovery")
     
-    all_jobs = []
     # Parse multiple keywords and locations
     platforms = state.get("platforms", list(PLATFORM_AGENTS.keys()))
     raw_keywords = state.get("keywords", "AI Engineer")
@@ -53,44 +53,56 @@ async def discover_jobs(state: WorkflowState) -> WorkflowState:
     locations = state.get("locations", ["Bangalore"])
     
     # Track seen job URLs to avoid duplicates
+    all_jobs = []
     seen_urls = set()
     
-    # Search each platform
-    for platform in platforms:
-        agent = PLATFORM_AGENTS.get(platform)
+    # Limit concurrency to 3 platforms at once to avoid system overload
+    semaphore = asyncio.Semaphore(3)
+    
+    async def search_platform(platform_name: str):
+        async with semaphore:
+            platform_jobs = []
+            agent = PLATFORM_AGENTS.get(platform_name)
+
         if not agent:
-            logger.warning(f"Unknown platform: {platform}")
-            continue
+            logger.warning(f"Unknown platform: {platform_name}")
+            return []
             
         for location in locations:
             for keyword in keywords_list:
                 try:
-                    logger.info(f"Searching {platform} for '{keyword}' in {location}")
+                    logger.info(f"🔍 Searching {platform_name} for '{keyword}' in {location}...")
                     result = await agent.run(keywords=keyword, location=location)
                     
                     if result.success and result.data:
                         jobs = result.data.get("jobs", [])
-                        new_jobs = []
                         for job in jobs:
                             url = job.get("job_url")
                             if url and url not in seen_urls:
                                 seen_urls.add(url)
-                                new_jobs.append(job)
+                                platform_jobs.append(job)
                         
-                        all_jobs.extend(new_jobs)
-                        logger.info(f"Adding {len(new_jobs)} new jobs from {platform} ({keyword} in {location})")
-                        
+                        logger.info(f"✅ {platform_name} found {len(jobs)} jobs for '{keyword}' in {location}")
                 except Exception as e:
-                    logger.error(f"Error on {platform} for {keyword} in {location}: {e}")
-                    # Don't add to state.errors for every single failure to avoid bloat
-                    # but log it.
+                    logger.error(f"❌ Error on {platform_name} for {keyword} in {location}: {e}")
+        return platform_jobs
+
+    # Run searches for all platforms in parallel
+    logger.info(f"🚀 Triggering search on {len(platforms)} platforms: {', '.join(platforms)}")
+    search_tasks = [search_platform(p) for p in platforms]
+    results = await asyncio.gather(*search_tasks)
     
-    logger.info(f"Total discovery complete: {len(all_jobs)} unique jobs found")
+    # Combine results
+    for platform_result in results:
+        all_jobs.extend(platform_result)
+    
+    logger.info(f"📊 Total discovery complete: {len(all_jobs)} unique jobs found across all platforms")
     
     return update_state(state, {
         "discovered_jobs": all_jobs,
         "current_step": WorkflowStep.SCORING.value,
     })
+
 
 
 async def score_jobs(state: WorkflowState) -> WorkflowState:

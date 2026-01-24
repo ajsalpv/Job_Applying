@@ -32,23 +32,34 @@ class InstahyreAgent(IntelligentJobDiscoveryAgent):
         
         try:
             async with playwright_manager.get_page() as page:
-                search_url = f"https://www.instahyre.com/search-jobs/?job_title={keywords}&location={location}"
+                # Instahyre search URL
+                search_url = f"https://www.instahyre.com/search-jobs/?job_title={keywords.replace(' ', '+')}&location={location.replace(' ', '+')}"
                 
-                await playwright_manager.navigate(page, search_url)
+                await playwright_manager.navigate(page, search_url, wait_for="load")
+                
+                # Instahyre often redirects or loads lazily
+                try:
+                    await page.wait_for_selector(".opportunity-card, .employer-job-name, [id^='employer-profile-opportunity']", timeout=15000)
+                except:
+                    self.logger.warning(f"Instahyre timeout waiting for selectors. Attempting extraction anyway.")
+                
+                await page.evaluate("window.scrollBy(0, 500)")
                 await page.wait_for_timeout(3000)
                 
                 raw_jobs = await page.evaluate("""
                     () => {
                         const jobs = [];
-                        const cards = document.querySelectorAll('.job-card, [class*="JobCard"]');
+                        // Instahyre uses these specific selectors according to inspection
+                        const cards = document.querySelectorAll('.opportunity-card, [id^="employer-profile-opportunity"], .job-card');
                         
                         cards.forEach((card, idx) => {
-                            if (idx < 25) {
-                                const titleEl = card.querySelector('.job-title, h3');
-                                const companyEl = card.querySelector('.company-name, [class*="company"]');
-                                const locationEl = card.querySelector('.location, [class*="location"]');
+                            if (idx < 30) {
+                                const titleEl = card.querySelector('.employer-job-name, .opportunity-title, h3, [class*="Title"]');
+                                const companyEl = card.querySelector('.company-name, [class*="company"], .employer-name');
+                                const locationEl = card.querySelector('.location, [class*="location"], .city');
                                 const expEl = card.querySelector('.experience, [class*="exp"]');
-                                const linkEl = card.querySelector('a[href*="/job/"]');
+                                const linkEl = card.querySelector('a[href*="/job/"], a[id^="view-job"], a.opportunity-title');
+                                const dateEl = card.querySelector('.posted-date, .job-posted, .ng-binding[ng-if*="posted"]');
                                 
                                 if (titleEl) {
                                     jobs.push({
@@ -57,6 +68,7 @@ class InstahyreAgent(IntelligentJobDiscoveryAgent):
                                         location: locationEl?.textContent?.trim() || '',
                                         experience_required: expEl?.textContent?.trim() || '',
                                         job_url: linkEl?.href || '',
+                                        posted_date: dateEl?.textContent?.trim() || 'Today',
                                         platform: 'instahyre',
                                     });
                                 }
@@ -67,18 +79,31 @@ class InstahyreAgent(IntelligentJobDiscoveryAgent):
                     }
                 """)
                 
+                self.logger.info(f"Instahyre found {len(raw_jobs)} raw jobs")
+                
+                # Standardized intelligent filtering
                 for job in raw_jobs:
                     role_lower = job.get("role", "").lower()
+                    exp_lower = job.get("experience_required", "").lower()
                     
                     if any(ex.lower() in role_lower for ex in EXCLUDED_JOB_TITLES):
                         continue
                     if "computer vision" in role_lower:
                         continue
-                    if any(kw in role_lower for kw in ["senior", "staff"]):
-                        continue
+                        
+                    # Refined Junior-Friendly Filter
+                    is_junior_friendly = any(kw in exp_lower for kw in ["0", "1", "2", "fresher", "entry", "intern", "junior"])
+                    has_high_exp = any(kw in exp_lower for kw in ["5", "6", "7", "8", "9", "5+", "8+", "10+"])
                     
-                    ai_keywords = ["ai", "ml", "machine learning", "llm", "nlp", "deep learning"]
-                    if any(kw in role_lower for kw in ai_keywords) or "engineer" in role_lower:
+                    if any(kw in role_lower for kw in ["senior", "staff", "lead", "principal", "manager"]):
+                        continue
+                        
+                    if has_high_exp and not is_junior_friendly:
+                        continue
+                            
+                    ai_keywords = ["ai", "ml", "machine learning", "llm", "nlp", "deep learning", "genai", "artificial intelligence", "data scientist"]
+                    search_kws = keywords.lower().split()
+                    if any(kw in role_lower for kw in ai_keywords) or any(kw in role_lower for kw in search_kws) or "engineer" in role_lower:
                         jobs.append(job)
                 
                 jobs = jobs[:max_results]

@@ -32,31 +32,43 @@ class HiristAgent(IntelligentJobDiscoveryAgent):
         
         try:
             async with playwright_manager.get_page() as page:
-                search_url = f"https://www.hirist.tech/?q={keywords}&loc={location}"
+                # Hirist search URL
+                search_url = f"https://www.hirist.tech/search/jobs?q={keywords.replace(' ', '+')}&l={location.replace(' ', '+')}"
                 
-                await playwright_manager.navigate(page, search_url)
+                await playwright_manager.navigate(page, search_url, wait_for="load")
+                
+                # Hirist uses Material UI / modern JS
+                try:
+                    await page.wait_for_selector("[data-testid='job_title'], a[href*='/j/'], .job-card", timeout=15000)
+                except:
+                    self.logger.warning(f"Hirist timeout waiting for selectors. Attempting extraction anyway.")
+                
+                await page.evaluate("window.scrollBy(0, 500)")
                 await page.wait_for_timeout(3000)
                 
                 raw_jobs = await page.evaluate("""
                     () => {
                         const jobs = [];
-                        const cards = document.querySelectorAll('.job-card, .job-box, [class*="JobCard"]');
+                        // Hirist v2 uses these specific selectors according to inspection
+                        const cards = document.querySelectorAll('a[href*="/j/"], .job-card, [class*="JobCard"]');
                         
                         cards.forEach((card, idx) => {
-                            if (idx < 25) {
-                                const titleEl = card.querySelector('.job-title, h3, [class*="title"]');
-                                const companyEl = card.querySelector('.company, [class*="company"]');
-                                const locationEl = card.querySelector('.location, [class*="location"]');
-                                const expEl = card.querySelector('.experience, [class*="exp"]');
-                                const linkEl = card.querySelector('a');
+                            if (idx < 30) {
+                                const titleEl = card.querySelector('[data-testid="job_title"], p.MuiTypography-subtitle2, .job-title');
+                                // Company is sometimes in a title attribute of a sibling or specific class
+                                const companyEl = card.querySelector('a.MuiTypography-root[title], .company-name, [class*="company"]');
+                                const locationEl = card.querySelector('.job-card-location, [class*="location"], .loc-name');
+                                const expEl = card.querySelector('.job-card-experience, [class*="exp"], .exp-name');
+                                const dateEl = card.querySelector('.job-posted-date, [class*="posted"], .date');
                                 
                                 if (titleEl) {
                                     jobs.push({
                                         role: titleEl.textContent?.trim() || '',
-                                        company: companyEl?.textContent?.trim() || '',
+                                        company: companyEl?.getAttribute('title') || companyEl?.textContent?.trim() || '',
                                         location: locationEl?.textContent?.trim() || '',
                                         experience_required: expEl?.textContent?.trim() || '',
-                                        job_url: linkEl?.href || '',
+                                        job_url: card.href || '',
+                                        posted_date: dateEl?.textContent?.trim() || 'Today',
                                         platform: 'hirist',
                                     });
                                 }
@@ -67,18 +79,39 @@ class HiristAgent(IntelligentJobDiscoveryAgent):
                     }
                 """)
                 
+                self.logger.info(f"Hirist found {len(raw_jobs)} raw jobs")
+                
+                # Standardized intelligent filtering
                 for job in raw_jobs:
                     role_lower = job.get("role", "").lower()
+                    exp_lower = job.get("experience_required", "").lower()
                     
-                    if any(ex.lower() in role_lower for ex in EXCLUDED_JOB_TITLES):
+                    if any(ex.lower() in role_lower for i, ex in enumerate(EXCLUDED_JOB_TITLES)):
                         continue
-                    if "computer vision" in role_lower:
+                    if "computer vision" in role_lower or "opencv" in role_lower:
                         continue
-                    if any(kw in role_lower for kw in ["senior", "staff"]):
-                        continue
+                        
+                    # Refined Junior-Friendly Filter
+                    is_junior_friendly = any(kw in exp_lower for kw in ["0", "1", "2", "fresher", "entry", "intern", "junior"])
+                    has_high_exp = any(kw in exp_lower for kw in ["5", "6", "7", "8", "9", "5+", "8+", "10+"])
                     
-                    ai_keywords = ["ai", "ml", "machine learning", "llm", "nlp", "deep learning"]
-                    if any(kw in role_lower for kw in ai_keywords) or "engineer" in role_lower:
+                    if any(kw in role_lower for kw in ["senior", "staff", "lead", "principal", "manager"]):
+                        continue
+                        
+                    if has_high_exp and not is_junior_friendly:
+                        continue
+                        
+                    # Also exclude if min exp is already 3+ and no junior match
+                    if any(kw in exp_lower for kw in ["3", "4"]) and not is_junior_friendly:
+                         # Wait, the user said they WANT "1 to 4" and "2 - 5".
+                         # "1 to 4" has "1", so is_junior_friendly is True. Correct.
+                         # "2 - 5" has "2", so is_junior_friendly is True. Correct.
+                         # "3 - 6" has no 0, 1, 2. is_junior_friendly is False. Correct.
+                         pass
+                            
+                    ai_keywords = ["ai", "ml", "machine learning", "llm", "nlp", "deep learning", "genai", "artificial intelligence", "data scientist"]
+                    search_kws = keywords.lower().split()
+                    if any(kw in role_lower for kw in ai_keywords) or any(kw in role_lower for kw in search_kws) or "engineer" in role_lower:
                         jobs.append(job)
                 
                 jobs = jobs[:max_results]

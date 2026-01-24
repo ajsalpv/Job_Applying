@@ -31,24 +31,10 @@ def log_new_application(
     job_description: str = "",
     interview_prep: str = "",
     skills_to_learn: str = "",
+    posted_date: str = "Today",
 ) -> Dict[str, Any]:
     """
     Log a new job application to tracking sheet and notify user.
-    
-    Args:
-        company: Company name
-        role: Job title
-        platform: Where the job was found
-        job_url: URL to job posting
-        fit_score: Calculated fit score (0-100)
-        location: Job location
-        experience_required: Experience requirement
-        job_description: Full JD text
-        interview_prep: Interview prep summary
-        skills_to_learn: Skills to learn for this role
-        
-    Returns:
-        Success status and row number
     """
     try:
         application = JobApplication(
@@ -64,28 +50,35 @@ def log_new_application(
             job_description=job_description[:500] if job_description else "",
             interview_prep=interview_prep,
             skills_to_learn=skills_to_learn,
-            notes="",
+            notes=f"Posted: {posted_date}",
         )
         
-        sheets_client.add_application(application)
+        is_new = sheets_client.add_application(application)
         
-        # Send notification
-        msg = (
-            f"🎯 *New Job Found!*\n"
-            f"🏢 *{company}*\n"
-            f"👨‍💻 {role}\n"
-            f"📍 {location}\n"
-            f"⭐ Fit: {fit_score}%\n"
-            f"🔗 [View Job]({job_url})"
-        )
-        notifier.send_notification(msg)
-        
-        return {
-            "success": True,
-            "message": f"Logged application for {role} at {company}",
-            "company": company,
-            "role": role,
-        }
+        # Send notification ONLY if it's a new application
+        if is_new:
+            msg = (
+                f"🎯 *New Job Found!*\n"
+                f"🏢 *{company}*\n"
+                f"👨‍💻 {role}\n"
+                f"📍 {location}\n"
+                f"🎓 Exp: {experience_required}\n"
+                f"📅 Posted: {posted_date}\n"
+                f"⭐ Fit: {fit_score}%\n"
+                f"🔗 [View Job]({job_url})"
+            )
+            notifier.send_notification(msg)
+            return {
+                "success": True,
+                "message": f"Logged application for {role} at {company}",
+                "row": 0
+            }
+        else:
+             return {
+                "success": True, 
+                "message": f"Skipped duplicate: {role} at {company}",
+                "row": 0
+             }
         
     except Exception as e:
         return {
@@ -133,15 +126,25 @@ def update_application_status(
 
 
 @tool
-def get_application_statistics() -> Dict[str, Any]:
+def get_application_statistics(today_only: bool = True) -> Dict[str, Any]:
     """
     Get comprehensive application statistics.
+    
+    Args:
+        today_only: If True, only return statistics for today's applications
     
     Returns:
         Statistics including totals, rates, and status breakdown
     """
+    from datetime import datetime
+    
     try:
-        applications = sheets_client.get_all_applications()
+        if today_only:
+            applications = sheets_client.get_todays_applications()
+            date_filter = datetime.now().strftime("%Y-%m-%d")
+        else:
+            applications = sheets_client.get_all_applications()
+            date_filter = "all time"
         
         stats = {
             "total_discovered": 0,
@@ -194,6 +197,8 @@ def get_application_statistics() -> Dict[str, Any]:
             offer_rate = 0
         
         return {
+            "date_filter": date_filter,
+            "today_only": today_only,
             "total_discovered": stats["total_discovered"],
             "total_applied": stats["total_applied"],
             "interviews": stats["interviews"],
@@ -210,6 +215,41 @@ def get_application_statistics() -> Dict[str, Any]:
         
     except Exception as e:
         return {"error": str(e)}
+
+
+@tool
+def get_todays_job_applications() -> Dict[str, Any]:
+    """
+    Get only today's job applications.
+    
+    Returns:
+        List of job applications discovered/added today
+    """
+    try:
+        applications = sheets_client.get_todays_applications()
+        
+        jobs_list = []
+        for app in applications:
+            jobs_list.append({
+                "company": app.company,
+                "role": app.role,
+                "platform": app.platform,
+                "location": app.location,
+                "fit_score": app.fit_score,
+                "status": app.status.value if hasattr(app.status, 'value') else str(app.status),
+                "job_url": app.job_url,
+                "date": app.date,
+            })
+        
+        return {
+            "success": True,
+            "applications": jobs_list,
+            "count": len(jobs_list),
+            "message": f"Found {len(jobs_list)} applications for today",
+        }
+        
+    except Exception as e:
+        return {"error": str(e), "applications": [], "count": 0}
 
 
 @tool
@@ -439,6 +479,7 @@ Use the tools to manage the application pipeline effectively."""
         self.add_tool(log_new_application)
         self.add_tool(update_application_status)
         self.add_tool(get_application_statistics)
+        self.add_tool(get_todays_job_applications)
         self.add_tool(get_pending_followups)
         self.add_tool(generate_followup_email)
         self.add_tool(get_applications_by_status)
@@ -456,6 +497,7 @@ Use the tools to manage the application pipeline effectively."""
         job_description: str = "",
         interview_prep: str = "",
         skills_to_learn: str = "",
+        posted_date: str = "Today",
     ) -> Dict[str, Any]:
         """Log a new application"""
         return log_new_application.invoke({
@@ -469,6 +511,7 @@ Use the tools to manage the application pipeline effectively."""
             "job_description": job_description,
             "interview_prep": interview_prep,
             "skills_to_learn": skills_to_learn,
+            "posted_date": posted_date,
         })
     
     async def update_status(
@@ -487,13 +530,19 @@ Use the tools to manage the application pipeline effectively."""
         })
         return result.get("success", False)
 
-    async def get_all_applications(self) -> List[JobApplication]:
-        """Get all applications"""
+    async def get_all_applications(self, today_only: bool = True) -> List[JobApplication]:
+        """Get applications (today only by default)"""
+        if today_only:
+            return sheets_client.get_todays_applications()
         return sheets_client.get_all_applications()
     
-    async def get_statistics(self) -> Dict[str, Any]:
-        """Get tracking statistics"""
-        return get_application_statistics.invoke({})
+    async def get_todays_applications(self) -> List[JobApplication]:
+        """Get only today's applications"""
+        return sheets_client.get_todays_applications()
+    
+    async def get_statistics(self, today_only: bool = True) -> Dict[str, Any]:
+        """Get tracking statistics (today only by default)"""
+        return get_application_statistics.invoke({"today_only": today_only})
     
     async def get_pending_followups(self, days_threshold: int = 7) -> List[Dict]:
         """Get applications needing follow-up"""
@@ -514,20 +563,26 @@ Use the tools to manage the application pipeline effectively."""
         })
         return result.get("email_body", "")
     
-    async def run(self, **kwargs) -> AgentResult:
-        """Run tracking agent to get current pipeline status"""
+    async def run(self, today_only: bool = True, **kwargs) -> AgentResult:
+        """Run tracking agent to get current pipeline status (today only by default)"""
         try:
-            stats = await self.get_statistics()
+            stats = await self.get_statistics(today_only=today_only)
+            todays_apps = get_todays_job_applications.invoke({}) if today_only else None
             followups = await self.get_pending_followups()
             analysis = analyze_application_pipeline.invoke({})
             
+            data = {
+                "statistics": stats,
+                "pending_followups": followups,
+                "pipeline_analysis": analysis,
+            }
+            
+            if today_only and todays_apps:
+                data["todays_applications"] = todays_apps.get("applications", [])
+            
             return self._success(
-                data={
-                    "statistics": stats,
-                    "pending_followups": followups,
-                    "pipeline_analysis": analysis,
-                },
-                message="Tracking data retrieved successfully"
+                data=data,
+                message=f"Tracking data retrieved successfully (today only: {today_only})"
             )
         except Exception as e:
             return self._error(str(e))

@@ -116,6 +116,19 @@ class SheetsClient:
         return applications
     
     @sheets_retry
+    def get_todays_applications(self) -> List[JobApplication]:
+        """Get only today's application records"""
+        from datetime import datetime
+        
+        today = datetime.now().strftime("%Y-%m-%d")
+        all_apps = self.get_all_applications()
+        
+        todays_apps = [app for app in all_apps if app.date == today]
+        logger.info(f"Found {len(todays_apps)} applications for today ({today})")
+        
+        return todays_apps
+    
+    @sheets_retry
     def update_application_status(
         self,
         company: str,

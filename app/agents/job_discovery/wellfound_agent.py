@@ -32,30 +32,41 @@ class WellfoundAgent(IntelligentJobDiscoveryAgent):
         
         try:
             async with playwright_manager.get_page() as page:
-                role_slug = keywords.lower().replace(" ", "-")
-                search_url = f"https://wellfound.com/role/l/{role_slug}"
+                # Use query-based URL which is often more stable
+                search_url = f"https://wellfound.com/jobs?q={keywords.replace(' ', '+')}"
                 
-                await playwright_manager.navigate(page, search_url)
-                await page.wait_for_timeout(3000)
+                await playwright_manager.navigate(page, search_url, wait_for="load")
+                
+                try:
+                    await page.wait_for_selector("[data-test='StartupResult'], [class*='styles_component'], .styles_result__", timeout=15000)
+                except:
+                    self.logger.warning("Wellfound timeout waiting for job listings.")
+                
+                await page.evaluate("window.scrollBy(0, 500)")
+                await page.wait_for_timeout(2000)
                 
                 raw_jobs = await page.evaluate("""
                     () => {
                         const jobs = [];
-                        const cards = document.querySelectorAll('[data-test="StartupResult"], [class*="styles_component"]');
+                        // Wellfound uses complex, obfuscated classes
+                        const cards = document.querySelectorAll('[data-test="StartupResult"], [class*="styles_component"], [class*="styles_jobListing"], .styles_result__, [class*="JobCard"]');
                         
                         cards.forEach((card, idx) => {
-                            if (idx < 25) {
-                                const titleEl = card.querySelector('h4, [class*="jobTitle"]');
-                                const companyEl = card.querySelector('h2, [class*="companyName"]');
-                                const locationEl = card.querySelector('[class*="location"]');
-                                const linkEl = card.querySelector('a[href*="/jobs/"]');
+                            if (idx < 30) {
+                                const titleEl = card.querySelector('h4, [class*="jobTitle"], [class*="roleTitle"], [class*="styles_title"]');
+                                const companyEl = card.querySelector('h2, [class*="companyName"], [class*="startupName"], [class*="styles_company"]');
+                                const locationEl = card.querySelector('[class*="location"], [class*="styles_location"]');
+                                const metaEl = card.querySelector('[class*="styles_metadata"], [class*="metadata"]');
+                                const linkEl = card.querySelector('a[href*="/jobs/"], a[class*="styles_titleLink"], a[class*="styles_component"]');
                                 
                                 if (titleEl) {
                                     jobs.push({
                                         role: titleEl.textContent?.trim() || '',
                                         company: companyEl?.textContent?.trim() || '',
                                         location: locationEl?.textContent?.trim() || 'Remote',
+                                        experience_required: metaEl?.textContent?.trim() || '0-2 years',
                                         job_url: linkEl?.href || '',
+                                        job_description: metaEl?.textContent?.trim() || '',
                                         platform: 'wellfound',
                                     });
                                 }
@@ -66,18 +77,31 @@ class WellfoundAgent(IntelligentJobDiscoveryAgent):
                     }
                 """)
                 
+                self.logger.info(f"Wellfound found {len(raw_jobs)} raw jobs")
+                
+                # Standardized intelligent filtering
                 for job in raw_jobs:
                     role_lower = job.get("role", "").lower()
+                    exp_lower = job.get("experience_required", "").lower()
                     
                     if any(ex.lower() in role_lower for ex in EXCLUDED_JOB_TITLES):
                         continue
                     if "computer vision" in role_lower:
                         continue
-                    if any(kw in role_lower for kw in ["senior", "staff"]):
+                        
+                    # Refined Junior-Friendly Filter
+                    is_junior_friendly = any(kw in exp_lower for kw in ["0", "1", "2", "fresher", "entry", "intern", "junior"])
+                    has_high_exp = any(kw in exp_lower for kw in ["5", "6", "7", "8", "9", "5+", "8+", "10+"])
+                    
+                    if any(kw in role_lower for kw in ["senior", "staff", "principal", "lead", "sr.", "manager"]):
+                        continue
+                        
+                    if has_high_exp and not is_junior_friendly:
                         continue
                     
-                    ai_keywords = ["ai", "ml", "machine learning", "llm", "nlp", "deep learning"]
-                    if any(kw in role_lower for kw in ai_keywords) or "engineer" in role_lower:
+                    ai_keywords = ["ai", "ml", "machine learning", "llm", "nlp", "deep learning", "genai", "artificial intelligence", "data scientist"]
+                    search_kws = keywords.lower().split()
+                    if any(kw in role_lower for kw in ai_keywords) or any(kw in role_lower for kw in search_kws) or "engineer" in role_lower:
                         jobs.append(job)
                 
                 jobs = jobs[:max_results]

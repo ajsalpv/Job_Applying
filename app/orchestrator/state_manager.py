@@ -71,7 +71,7 @@ def create_initial_state(
     return WorkflowState(
         keywords=keywords,
         locations=locations or ["Bangalore", "Remote"],
-        platforms=platforms or ["linkedin", "indeed", "naukri"],
+        platforms=platforms or ["linkedin", "indeed", "naukri", "hirist", "instahyre", "cutshort", "glassdoor", "wellfound"],
         min_score=min_score,
         discovered_jobs=[],
         scored_jobs=[],

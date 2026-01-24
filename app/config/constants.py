@@ -75,7 +75,9 @@ EXCLUDED_SKILLS = [
 ]
 
 # Experience configuration
-USER_EXPERIENCE_YEARS = 2  # Updated to 2 years
+USER_EXPERIENCE_YEARS = 1  # Updated to 1 year
+# Maximum experience range to consider (will accept 0-2 years roles)
+MAX_EXPERIENCE_ACCEPTABLE = 2
 
 
 # Target job titles (AI/ML focused, NO Computer Vision)
@@ -109,23 +111,18 @@ EXCLUDED_JOB_TITLES = [
 
 # Location preferences (User can apply to these cities)
 PREFERRED_LOCATIONS = [
-    # Remote options
-    "Remote",
-    "Work from Home",
-    "WFH",
-    "Hybrid",
-    # Primary cities
-    "Bangalore",
-    "Bengaluru",
+    # Highest Priority
+    "Remote", "Work from Home", "WFH", "Hybrid",
+    
+    # High Priority Cities
+    "Bangalore", "Bengaluru",
     "Hyderabad",
     "Chennai",
-    # Kerala cities
-    "Kochi",
-    "Cochin",
-    "Calicut",
-    "Kozhikode",
-    "Trivandrum",
-    "Thiruvananthapuram",
+    "Kochi", "Cochin",
+    "Calicut", "Kozhikode",
+    "Trivandrum", "Thiruvananthapuram",
+    "Mohali",
+    
     # General
     "India",
 ]

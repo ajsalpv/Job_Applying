@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     
     # Browser Settings
     headless_browser: bool = Field(default=True, env="HEADLESS_BROWSER")
-    browser_timeout: int = 30000  # milliseconds
+    browser_timeout: int = 60000  # milliseconds (60 seconds)
     
     # Scoring
     min_fit_score: int = Field(default=70, env="MIN_FIT_SCORE")
@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     # Notifications
     telegram_bot_token: str = Field(default="8380477714:AAEB790RVdawDIzOWupFl191cbIJ7dH1yqo", env="TELEGRAM_BOT_TOKEN")
     telegram_chat_id: str = Field(default="1629864542", env="TELEGRAM_CHAT_ID")
+    
+    # SMTP Configuration
+    smtp_email: Optional[str] = Field(default=None, env="SMTP_EMAIL")
+    smtp_password: Optional[str] = Field(default=None, env="SMTP_PASSWORD")
     
     # User Profile
     user_name: str = Field(default="Ajsal PV", env="USER_NAME")

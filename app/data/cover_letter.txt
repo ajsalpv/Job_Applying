@@ -1,0 +1,20 @@
+Dear Hiring Manager,
+
+I am writing to express my strong interest in the **Artificial Intelligence Engineer (AI Automation)** role at your organization. With hands-on experience in building and deploying AI solutions using Large Language Models (LLMs), I am eager to contribute to impactful, production-ready AI systems.
+
+Currently, I am working as an **AI Developer** at **4Champz, Bangalore**, where I develop end-to-end AI solutions by integrating LLMs into real-world applications for automation, intelligent workflows, and decision-making. My role involves building scalable backend services using **Python** and **Node.js**, designing secure APIs, and implementing AI inference pipelines. I have also designed and deployed LLM-powered automation workflows using **n8n**, enabling multi-step actions such as routing, scheduling, notifications, and data processing.
+
+Key Highlights of my Experience:
+- Designing and optimizing **prompt engineering strategies**, structured prompt templates, and evaluation loops to improve LLM accuracy and reliability.
+- Building AI modules for text summarization, sentiment analysis, scoring, personalized recommendations, and automated insight generation.
+- Integrating **conversational and voice-based AI systems** using **Vocode**, along with STT/TTS pipelines such as **Deepgram** and **Google STT/TTS**.
+- Accelerating inference and real-time responses using **Groq**.
+
+In addition to my professional experience, I have worked on multiple live AI projects, including an **AI-powered yoga and healthcare app** (available on Play Store/App Store), where I implemented LLM-driven personalization, feedback analysis, and AI-generated diet plans. I have also developed AI systems for medical literature summarization and symptom analysis, leveraging technologies such as **LangChain**, **FAISS vector stores**, **Hugging Face**, and **FastAPI**.
+
+I am passionate about building practical AI solutions that solve real-world problems and continuously improving my skills in machine learning, NLP, and production AI systems. I believe my experience aligns well with the requirements of this role, and I would welcome the opportunity to contribute to your team.
+
+I am available for an interview at your convenience and can be reached at **pvajsal27@gmail.com** or **+91 7356793165**. Thank you for your time and consideration. I am eager to discuss how my skills and experiences align with the requirements of the **Artificial Intelligence Engineer (AI Automation)** at your organization.
+
+Best regards,
+**Ajsal PV**

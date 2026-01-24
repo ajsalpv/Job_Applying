@@ -5,16 +5,20 @@ Uses ReAct pattern for intelligent job evaluation
 from typing import List, Dict, Any
 from langchain_core.tools import tool
 from app.agents.base_agent import LangGraphAgent, AgentResult
-from app.config.prompts import JOB_SCORING_SYSTEM, JOB_SCORING_USER
+from app.config.prompts import (
+    JOB_SCORING_SYSTEM, JOB_SCORING_USER,
+    JOB_ENRICHMENT_SYSTEM, JOB_ENRICHMENT_USER
+)
 from app.config.constants import (
     SCORING_WEIGHTS, USER_SKILLS, EXCLUDED_SKILLS,
     TARGET_JOB_TITLES, EXCLUDED_JOB_TITLES,
     USER_EXPERIENCE_YEARS,
 )
-from app.config.settings import get_settings
+from app.tools.browser.playwright_manager import playwright_manager
+
+# ... imports ...
 
 
-# Define tools for the scoring agent
 @tool
 def calculate_skill_match(job_skills: List[str], required_skills: List[str]) -> Dict[str, Any]:
     """
@@ -33,8 +37,9 @@ def calculate_skill_match(job_skills: List[str], required_skills: List[str]) -> 
     
     all_job_skills = set([s.lower() for s in (job_skills + required_skills)])
     
+    match_ratio = 0
     for skill in all_job_skills:
-        if skill in user_skills_lower:
+        if any(us in skill for us in user_skills_lower) or any(skill in us for us in user_skills_lower):
             matching.append(skill)
         else:
             # Check if it's an excluded skill (Computer Vision)
@@ -46,21 +51,21 @@ def calculate_skill_match(job_skills: List[str], required_skills: List[str]) -> 
         match_ratio = len(matching) / len(all_job_skills)
         score = int(match_ratio * 40)
     else:
-        score = 20  # Default if no skills specified
+        score = 25  # Default if no skills specified
     
     return {
         "score": score,
         "max_score": 40,
         "matching_skills": matching,
         "missing_skills": missing,
-        "match_percentage": round(match_ratio * 100, 1) if len(all_job_skills) > 0 else 50,
+        "match_percentage": round(match_ratio * 100, 1) if len(all_job_skills) > 0 else 60,
     }
 
 
 @tool
 def calculate_experience_match(experience_required: str) -> Dict[str, Any]:
     """
-    Calculate if experience level matches candidate's experience.
+    Calculate if experience level matches candidate's experience (STRICT: 1 year experience - prefers 0-2 years max).
     
     Args:
         experience_required: Experience requirement string (e.g., "2-4 years")
@@ -68,33 +73,57 @@ def calculate_experience_match(experience_required: str) -> Dict[str, Any]:
     Returns:
         Score and analysis
     """
-    user_exp = USER_EXPERIENCE_YEARS
+    import re
+    
+    user_exp = USER_EXPERIENCE_YEARS  # Now 1 year
     exp_lower = experience_required.lower() if experience_required else ""
     
     score = 0
     analysis = ""
+    is_excluded = False
     
-    if not exp_lower or "not specified" in exp_lower:
-        score = 15
-        analysis = "Experience not specified, assuming moderate fit"
-    elif any(x in exp_lower for x in ["0", "fresher", "entry", "graduate"]):
-        score = 25  # Perfect for 2 years exp
-        analysis = "Entry level - good fit for 2 years experience"
-    elif "1" in exp_lower or "1-2" in exp_lower or "0-2" in exp_lower:
+    # Extract numbers from experience string (e.g., "2-4 years" -> [2, 4])
+    numbers = re.findall(r'\d+', exp_lower)
+    min_exp = int(numbers[0]) if numbers else None
+    max_exp = int(numbers[1]) if len(numbers) > 1 else min_exp
+    
+    # Keywords for fresh/entry-level
+    is_fresher_role = any(kw in exp_lower for kw in ["fresher", "fresh", "entry", "intern", "trainee", "graduate"])
+    is_junior = any(kw in exp_lower for kw in ["junior", "jr", "associate"])
+    
+    # STRICT FILTERING for 1 year experience:
+    if min_exp is not None:
+        if min_exp >= 3:
+            # Requires 3+ years minimum - EXCLUDE
+            score = 0
+            analysis = f"Requires {min_exp}+ years minimum - too senior for 1 year exp"
+            is_excluded = True
+        elif min_exp == 0 and (max_exp is None or max_exp <= 2):
+            # 0-2 years - PERFECT
+            score = 25
+            analysis = "Perfect match (0-2 years)"
+        elif min_exp <= 1 and (max_exp is None or max_exp <= 3):
+            # 0-1 or 1-2 or 1-3 years - GOOD
+            score = 25
+            analysis = "Good match for 1 year experience"
+        elif min_exp == 2 and (max_exp is None or max_exp <= 4):
+            # 2-4 years - STRETCH but acceptable
+            score = 15
+            analysis = "Stretch role (2+ years preferred)"
+        else:
+            # Anything else with high experience
+            score = 0
+            analysis = f"Experience requirement too high ({experience_required})"
+            is_excluded = True
+    elif is_fresher_role or is_junior:
         score = 25
-        analysis = "Perfect experience match"
-    elif "2" in exp_lower or "1-3" in exp_lower or "2-3" in exp_lower:
-        score = 23
-        analysis = "Excellent experience match"
-    elif "3" in exp_lower or "2-4" in exp_lower or "2-5" in exp_lower:
-        score = 18
-        analysis = "Slightly above experience but can apply"
-    elif "4" in exp_lower or "5" in exp_lower or "5+" in exp_lower:
-        score = 8
-        analysis = "Senior role - may be too experienced requirement"
+        analysis = "Entry-level/fresher role"
+    elif not exp_lower or "not specified" in exp_lower:
+        score = 15
+        analysis = "Experience not specified"
     else:
-        score = 12
-        analysis = "Unable to parse experience requirement"
+        score = 10
+        analysis = "Experience requirement unclear"
     
     return {
         "score": score,
@@ -102,6 +131,7 @@ def calculate_experience_match(experience_required: str) -> Dict[str, Any]:
         "user_experience": user_exp,
         "required": experience_required,
         "analysis": analysis,
+        "is_excluded": is_excluded
     }
 
 
@@ -109,42 +139,31 @@ def calculate_experience_match(experience_required: str) -> Dict[str, Any]:
 def calculate_location_match(job_location: str) -> Dict[str, Any]:
     """
     Calculate if job location matches candidate preferences.
-    
-    Args:
-        job_location: Job location string
-        
-    Returns:
-        Score and analysis
     """
     loc_lower = job_location.lower() if job_location else ""
     
     score = 0
     is_remote = False
     
-    # Remote - highest priority
-    if "remote" in loc_lower or "wfh" in loc_lower or "work from home" in loc_lower:
+    # Highest Priority Locations (Score: 15)
+    high_priority_cities = [
+        "bangalore", "bengaluru", "hyderabad", "chennai", 
+        "kochi", "cochin", "calicut", "kozhikode", 
+        "trivandrum", "thiruvananthapuram", "mohali"
+    ]
+    
+    if "remote" in loc_lower or "wfh" in loc_lower or "home" in loc_lower:
         score = 15
         is_remote = True
-    # Primary cities - full score
-    elif "bangalore" in loc_lower or "bengaluru" in loc_lower:
+    elif any(city in loc_lower for city in high_priority_cities):
         score = 15
-    elif "hyderabad" in loc_lower:
-        score = 15
-    elif "chennai" in loc_lower:
-        score = 15
-    # Kerala cities - full score
-    elif any(city in loc_lower for city in ["kochi", "cochin", "calicut", "kozhikode", "trivandrum", "thiruvananthapuram"]):
-        score = 15
-    # Hybrid
     elif "hybrid" in loc_lower:
         score = 12
-    # Other Indian cities
-    elif any(city in loc_lower for city in ["mumbai", "pune", "delhi", "gurgaon", "noida", "gurugram"]):
-        score = 10
-    elif "india" in loc_lower:
+        # If hybrid AND in priority location, it gets 15 (logic above catches it first if city mentioned)
+    elif any(city in loc_lower for city in ["mumbai", "pune", "delhi", "gurgaon", "noida", "india"]):
         score = 10
     else:
-        score = 5  # International or unknown
+        score = 5
     
     return {
         "score": score,
@@ -158,39 +177,21 @@ def calculate_location_match(job_location: str) -> Dict[str, Any]:
 def calculate_role_relevance(job_title: str) -> Dict[str, Any]:
     """
     Calculate if job title is relevant to target roles.
-    
-    Args:
-        job_title: The job title/role
-        
-    Returns:
-        Score and analysis
     """
     title_lower = job_title.lower()
     
-    # Check for excluded roles (Computer Vision)
+    # Exclusion check
     for excluded in EXCLUDED_JOB_TITLES:
         if excluded.lower() in title_lower:
-            return {
-                "score": 0,
-                "max_score": 20,
-                "is_excluded": True,
-                "reason": f"Excluded role type: {excluded}",
-            }
+            return {"score": 0, "max_score": 20, "is_excluded": True, "reason": f"Excluded: {excluded}"}
     
-    # Check for CV keywords
-    cv_keywords = ["computer vision", "opencv", "image processing", "video"]
-    if any(kw in title_lower for kw in cv_keywords):
-        return {
-            "score": 0,
-            "max_score": 20,
-            "is_excluded": True,
-            "reason": "Computer Vision role - excluded",
-        }
-    
-    # Score based on target roles
+    # CV check
+    if any(kw in title_lower for kw in ["computer vision", "opencv", "image", "video"]):
+        return {"score": 0, "max_score": 20, "is_excluded": True, "reason": "Computer Vision role"}
+
+    # Relevance
     score = 0
     matched_role = None
-    
     for target in TARGET_JOB_TITLES:
         if target.lower() in title_lower:
             score = 20
@@ -198,87 +199,28 @@ def calculate_role_relevance(job_title: str) -> Dict[str, Any]:
             break
     
     if score == 0:
-        # Partial matches
-        ai_keywords = ["ai", "ml", "machine learning", "llm", "nlp", "deep learning", "genai"]
-        if any(kw in title_lower for kw in ai_keywords):
+        if any(kw in title_lower for kw in ["ai", "ml", "machine learning", "llm", "nlp", "genai"]):
             score = 18
         elif "data scientist" in title_lower:
             score = 15
-        elif "developer" in title_lower or "engineer" in title_lower:
+        elif "engineer" in title_lower or "developer" in title_lower:
             score = 10
         else:
             score = 5
-    
-    return {
-        "score": score,
-        "max_score": 20,
-        "is_excluded": False,
-        "matched_role": matched_role,
-    }
-
-
-@tool
-def check_cv_exclusion(job_description: str, job_title: str) -> Dict[str, Any]:
-    """
-    Check if job should be excluded because it's a Computer Vision role.
-    
-    Args:
-        job_description: Full job description text
-        job_title: Job title
-        
-    Returns:
-        Whether job should be excluded
-    """
-    text = f"{job_title} {job_description}".lower()
-    
-    cv_indicators = [
-        "computer vision", "opencv", "image processing",
-        "object detection", "yolo", "image recognition",
-        "video processing", "image classification", "cnn for images",
-        "image segmentation", "visual recognition"
-    ]
-    
-    cv_count = sum(1 for ind in cv_indicators if ind in text)
-    
-    # If 2+ CV indicators, likely a CV role
-    is_cv_role = cv_count >= 2
-    
-    return {
-        "is_excluded": is_cv_role,
-        "cv_indicator_count": cv_count,
-        "reason": "Computer Vision role detected" if is_cv_role else "Not a CV role",
-    }
+            
+    return {"score": score, "max_score": 20, "is_excluded": False, "matched_role": matched_role}
 
 
 class ScoringAgentLangGraph(LangGraphAgent):
-    """
-    LangGraph-based job scoring agent.
-    
-    Uses tools to:
-    - Calculate skill match
-    - Calculate experience match
-    - Calculate location match
-    - Calculate role relevance
-    - Check CV exclusion
-    """
+    """LangGraph-based job scoring and enrichment agent."""
     
     def __init__(self):
-        system_prompt = """You are an expert job matching AI agent.
-Your task is to evaluate job postings and calculate fit scores for a candidate.
-
-CANDIDATE PROFILE:
-- Experience: 2 years as AI/ML Developer
-- Location: Bangalore, India (prefers Remote)
-- Skills: Python, LangChain, LLM, RAG, TensorFlow, NLP, FastAPI, Groq
-- Target Roles: AI Engineer, ML Engineer, LLM Engineer, NLP Engineer
-
-SCORING RULES:
-1. Use the provided tools to calculate each score component
-2. EXCLUDE any Computer Vision roles (score = 0)
-3. Total score = skill_match + experience_match + location_match + role_relevance
-4. Maximum total score is 100
-
-Always use the tools to calculate scores, don't estimate manually."""
+        system_prompt = JOB_SCORING_SYSTEM.format(
+            user_name="Ajsal",
+            experience_years=USER_EXPERIENCE_YEARS,
+            location="Bangalore/Kerala",
+            skills=", ".join(USER_SKILLS[:10])
+        )
 
         super().__init__("scoring", system_prompt)
         
@@ -287,62 +229,132 @@ Always use the tools to calculate scores, don't estimate manually."""
         self.add_tool(calculate_experience_match)
         self.add_tool(calculate_location_match)
         self.add_tool(calculate_role_relevance)
-        self.add_tool(check_cv_exclusion)
     
-    async def score_job(
-        self,
-        company: str,
-        role: str,
-        location: str,
-        experience_required: str,
-        job_description: str,
-        skills_required: List[str] = None,
-    ) -> Dict[str, Any]:
-        """
-        Score a single job posting using LangGraph agent.
-        """
-        # First check CV exclusion
-        cv_check = check_cv_exclusion.invoke({
-            "job_description": job_description or "",
-            "job_title": role,
-        })
-        
-        if cv_check.get("is_excluded"):
+    async def _fetch_full_description(self, url: str) -> str:
+        """Fetch full job description from URL if snippet is insufficient."""
+        if not url or "linkedin" in url: # LinkedIn direct access often blocked
+            return ""
+            
+        try:
+            self.logger.info(f"Fetching full description from: {url}")
+            async with playwright_manager.get_page() as page:
+                await playwright_manager.navigate(page, url)
+                
+                # generic selectors for detailed description
+                text = await page.evaluate("""() => {
+                    const el = document.querySelector('.job-description, #job-description, .description, [class*="description"], article');
+                    return el ? el.innerText : document.body.innerText;
+                }""")
+                return text[:5000] # Limit size
+        except Exception as e:
+            self.logger.warning(f"Failed to fetch full description: {e}")
+            return ""
+    
+    async def enrich_job(self, job: Dict[str, Any]) -> Dict[str, Any]:
+        """Use LLM to generate interview prep, skills to learn, and notes."""
+        try:
+            description = job.get("job_description") or f"Role: {job['role']} at {job['company']} in {job['location']}. Experience: {job['experience_required']}."
+            
+            enrich_system = JOB_ENRICHMENT_SYSTEM.format(
+                user_name="Ajsal",
+                experience_years=USER_EXPERIENCE_YEARS,
+                skills=", ".join(USER_SKILLS[:10])
+            )
+            
+            enrich_user = JOB_ENRICHMENT_USER.format(
+                company=job.get("company", "Unknown"),
+                role=job.get("role", "Unknown"),
+                job_description=description
+            )
+            
+            # Simple LLM call instead of full graph for speed
+            response = await self.llm.ainvoke([
+                {"role": "system", "content": enrich_system},
+                {"role": "user", "content": enrich_user}
+            ])
+            
+            # Parse response
+            content = response.content
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            
+            enrichment = json.loads(content)
             return {
-                "fit_score": 0,
-                "is_excluded": True,
-                "reason": cv_check.get("reason"),
-                "recommendation": "skip",
+                **job,
+                "interview_prep": enrichment.get("interview_prep", ""),
+                "skills_to_learn": enrichment.get("skills_to_learn", ""),
+                "notes": enrichment.get("notes", ""),
+                "job_summary": enrichment.get("job_summary", ""),
             }
+        except Exception as e:
+            self.logger.error(f"Enrichment error: {e}")
+            return {
+                **job,
+                "interview_prep": "Identify core AI concepts and company projects.",
+                "skills_to_learn": "Verify skills mentioned in J/D.",
+                "notes": "Fast application recommended.",
+                "job_summary": job.get("role", ""),
+            }
+
+    async def score_job(self, job: Dict[str, Any]) -> Dict[str, Any]:
+        """Score a single job posting with strict experience filtering."""
+        role = job.get("role", "")
+        exp_req = job.get("experience_required", "")
+        description = job.get("job_description", "")
+        url = job.get("job_url", "")
         
-        # Calculate individual scores using tools directly (faster than agent)
-        skill_result = calculate_skill_match.invoke({
-            "job_skills": skills_required or [],
-            "required_skills": [],
-        })
-        
-        exp_result = calculate_experience_match.invoke({
-            "experience_required": experience_required or "",
-        })
-        
-        loc_result = calculate_location_match.invoke({
-            "job_location": location or "",
-        })
-        
-        role_result = calculate_role_relevance.invoke({
-            "job_title": role,
-        })
-        
-        # Check if role is excluded
+        # 1. Role Relevance & Initial Exclusion
+        role_result = calculate_role_relevance.invoke({"job_title": role})
         if role_result.get("is_excluded"):
-            return {
-                "fit_score": 0,
-                "is_excluded": True,
-                "reason": role_result.get("reason"),
-                "recommendation": "skip",
-            }
+            return {"fit_score": 0, "is_excluded": True, "reason": role_result.get("reason")}
+            
+        # 0. FETCH FULL DESCRIPTION if missing or short
+        # We skip this for LinkedIn because it's hard to scrape directly
+        # But for Indeed/Glassdoor/others it helps catch hidden experience reqs
+        if (not description or len(description) < 200) and url and "linkedin" not in url:
+             full_desc = await self._fetch_full_description(url)
+             if full_desc:
+                 description = full_desc
+                 job["job_description"] = full_desc # Update job object in place
+                 
+        # 2. Strict Experience Check (User wants 1 year max)
+        # If exp_req is missing or empty, try to find it in the description
+        if (not exp_req or exp_req.lower() == "not specified") and description:
+            import re
+            # Look for explicit "Experience: X Years" or "X-Y Years" in description
+            # Simple patterns to catch "Experience: 5 Years" or "5-8 Years experience"
+            
+            # Pattern 1: "Experience: 5 Years"
+            exp_match = re.search(r'experience\s*:\s*(\d+)(?:\s*-\s*(\d+))?\s*y', description.lower())
+            
+            # Pattern 2: "5 years experience" or "5-7 years experience"
+            if not exp_match:
+                exp_match = re.search(r'(\d+)(?:\s*-\s*(\d+))?\s*\+?\s*years?\s*experience', description.lower())
+                
+            if exp_match:
+                min_e = int(exp_match.group(1))
+                max_e = int(exp_match.group(2)) if exp_match.group(2) else None
+                
+                if max_e:
+                    exp_req = f"{min_e}-{max_e} years"
+                else:
+                    exp_req = f"{min_e} years"
+                
+                self.logger.info(f"Extracted experience '{exp_req}' from description for {role}")
+
+        exp_result = calculate_experience_match.invoke({"experience_required": exp_req})
+        if exp_result.get("is_excluded"):
+            return {"fit_score": 0, "is_excluded": True, "reason": f"Experience too high ({exp_req}): {exp_result.get('analysis')}"}
+            
+        # 3. Location Match
+        loc_result = calculate_location_match.invoke({"job_location": job.get("location", "")})
         
-        # Calculate total score
+        # 4. Skill Match
+        skill_result = calculate_skill_match.invoke({
+            "job_skills": job.get("skills_required", []),
+            "required_skills": []
+        })
+        
         total_score = (
             skill_result["score"] +
             exp_result["score"] +
@@ -350,13 +362,7 @@ Always use the tools to calculate scores, don't estimate manually."""
             role_result["score"]
         )
         
-        # Determine recommendation
-        if total_score >= 80:
-            recommendation = "apply"
-        elif total_score >= 60:
-            recommendation = "maybe"
-        else:
-            recommendation = "skip"
+        recommendation = "apply" if total_score >= 80 else "maybe" if total_score >= 60 else "skip"
         
         return {
             "fit_score": total_score,
@@ -368,52 +374,36 @@ Always use the tools to calculate scores, don't estimate manually."""
             "missing_skills": skill_result.get("missing_skills", []),
             "recommendation": recommendation,
             "is_excluded": False,
-            "reason": f"Score breakdown: Skills {skill_result['score']}/40, "
-                     f"Exp {exp_result['score']}/25, "
-                     f"Location {loc_result['score']}/15, "
-                     f"Role {role_result['score']}/20",
+            "reason": f"Breakdown: Skills {skill_result['score']}/40, Exp {exp_result['score']}/25, Loc {loc_result['score']}/15, Role {role_result['score']}/20",
         }
     
-    async def run(
-        self,
-        jobs: List[Dict[str, Any]],
-        min_score: int = 50,
-    ) -> AgentResult:
-        """
-        Score a list of jobs and filter by minimum score.
-        """
-        self.logger.info(f"Scoring {len(jobs)} jobs (min_score={min_score})")
+    async def run(self, jobs: List[Dict[str, Any]], min_score: int = 50) -> AgentResult:
+        """Score, filter, and enrich jobs."""
+        self.logger.info(f"Scoring and Enriching {len(jobs)} jobs")
         
         scored_jobs = []
         excluded_count = 0
         
         for job in jobs:
             try:
-                result = await self.score_job(
-                    company=job.get("company", ""),
-                    role=job.get("role", ""),
-                    location=job.get("location", ""),
-                    experience_required=job.get("experience_required", ""),
-                    job_description=job.get("job_description", ""),
-                    skills_required=job.get("skills_required", []),
-                )
+                result = await self.score_job(job)
                 
-                if result.get("is_excluded"):
+                if result.get("is_excluded") or result["fit_score"] < min_score:
                     excluded_count += 1
                     continue
                 
-                if result["fit_score"] >= min_score:
-                    scored_jobs.append({
-                        **job,
-                        "fit_score": result["fit_score"],
-                        "scoring_details": result,
-                    })
+                # Enrich only passing jobs to save tokens/time
+                enriched_job = await self.enrich_job({
+                    **job,
+                    "fit_score": result["fit_score"],
+                    "scoring_details": result
+                })
+                scored_jobs.append(enriched_job)
                     
             except Exception as e:
-                self.logger.error(f"Error scoring job: {e}")
+                self.logger.error(f"Error processing job: {e}")
                 continue
         
-        # Sort by score descending
         scored_jobs.sort(key=lambda x: x.get("fit_score", 0), reverse=True)
         
         return self._success(
@@ -421,12 +411,10 @@ Always use the tools to calculate scores, don't estimate manually."""
                 "jobs": scored_jobs,
                 "total_scored": len(jobs),
                 "passed_filter": len(scored_jobs),
-                "excluded_cv": excluded_count,
+                "excluded": excluded_count,
             },
-            message=f"Scored {len(jobs)} jobs, {len(scored_jobs)} passed, {excluded_count} CV roles excluded"
+            message=f"Found {len(scored_jobs)} high-quality matches after strict filtering and enrichment."
         )
 
-
-# Export as default scoring agent
 scoring_agent = ScoringAgentLangGraph()
 ScoringAgent = ScoringAgentLangGraph

@@ -176,27 +176,28 @@ Return as JSON:
 }}"""
 
 
-# ============================================================
-# FOLLOW-UP PROMPTS
-# ============================================================
+JOB_ENRICHMENT_SYSTEM = """You are an elite Career Coach and Technical Interview Master specializing in AI/ML, Data Science, and Software Engineering.
+Your goal is to provide an EXHAUSTIVE and HIGHLY DETAILED roadmap for success for a specific job application.
 
-FOLLOWUP_EMAIL_SYSTEM = """You are an expert at writing professional follow-up emails for job applications.
-Keep emails:
-1. Brief and respectful of time
-2. Showing continued interest
-3. Professional but personable
-4. Not pushy or desperate"""
+CANDIDATE:
+- Name: {user_name}
+- Level: Junior (~{experience_years} years experience)
+- Skills: {skills}
 
-FOLLOWUP_EMAIL_USER = """JOB APPLICATION:
-Company: {company}
-Role: {role}
-Applied Date: {applied_date}
-Days Since Applied: {days_since}
+Your advice must be exhaustive. Don't just give snippets; provide a full preparation strategy."""
 
-Write a follow-up email that:
-1. References the specific role
-2. Reiterates interest
-3. Offers to provide additional information
-4. Keeps it under 150 words
+JOB_ENRICHMENT_USER = """Analyze this job posting EXHAUSTIVELY:
 
-Return the email as plain text."""
+COMPANY: {company}
+ROLE: {role}
+DESCRIPTION:
+{job_description}
+
+Provide enrichment data in this exact JSON format. The contents of each field should be DETAILED and MULTI-PARAGRAPH where appropriate:
+
+{{
+    "interview_prep": "A comprehensive STEP-BY-STEP guide on 'How to prepare for this specific interview'. Include: 1. Technical domains to master (detailed), 2. Potential coding/ML challenge types, 3. Specific company projects or tech stack to research, 4. Behavioral strategies for this company's culture.",
+    "skills_to_learn": "An EXHAUSTIVE list of 'Each and everything the candidate needs to learn' to excel in this role. Categorize them into: 1. Core Technical Skills (Tools/Libraries/Frameworks), 2. Theoretical Concepts (Algorithms/Math/Architectures), 3. Domain Knowledge, 4. Soft Skills. Be thorough!",
+    "notes": "Strategic 'Insider' notes. Why is this a fit? What is the 'X-factor' that will get the candidate hired? Mention specific JD keywords to emphasize.",
+    "job_summary": "A concise but high-impact summary of the role's mission and key contribution to the company."
+}}"""

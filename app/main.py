@@ -16,6 +16,7 @@ from app.config.settings import get_settings
 from app.tools.browser import playwright_manager
 from app.tools.utils.logger import get_logger
 from app.orchestrator.scheduler import scheduler
+from app.tools.notifications.telegram_service import telegram_service
 
 logger = get_logger("main")
 
@@ -33,10 +34,14 @@ async def lifespan(app: FastAPI):
     # Start background scheduler
     await scheduler.start()
     
+    # Start Telegram Listener
+    asyncio.create_task(telegram_service.start_polling())
+    
     yield
     # Cleanup on shutdown
     logger.info("🛑 Shutting down...")
     await scheduler.stop()
+    telegram_service.stop()
     await playwright_manager.close()
 
 

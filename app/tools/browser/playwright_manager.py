@@ -29,21 +29,25 @@ class PlaywrightManager:
         self._browser: Optional[Browser] = None
         self._playwright = None
         self._context: Optional[BrowserContext] = None
+        self._lock = asyncio.Lock()
+
     
     async def _get_browser(self) -> Browser:
-        """Get or create browser instance"""
-        if self._browser is None or not self._browser.is_connected():
-            self._playwright = await async_playwright().start()
-            self._browser = await self._playwright.chromium.launch(
-                headless=self.settings.headless_browser,
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--disable-dev-shm-usage",
-                    "--no-sandbox",
-                ]
-            )
-            logger.info("Browser launched")
-        return self._browser
+        """Get or create browser instance with lock protection"""
+        async with self._lock:
+            if self._browser is None or not self._browser.is_connected():
+                self._playwright = await async_playwright().start()
+                self._browser = await self._playwright.chromium.launch(
+                    headless=self.settings.headless_browser,
+                    args=[
+                        "--disable-blink-features=AutomationControlled",
+                        "--disable-dev-shm-usage",
+                        "--no-sandbox",
+                    ]
+                )
+                logger.info("Browser launched")
+            return self._browser
+
     
     async def _get_context(self) -> BrowserContext:
         """Get or create browser context with stealth settings"""

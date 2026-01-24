@@ -32,24 +32,32 @@ class GlassdoorAgent(IntelligentJobDiscoveryAgent):
         
         try:
             async with playwright_manager.get_page() as page:
-                keyword_slug = keywords.lower().replace(" ", "-")
+                # Use a more generic search URL that accepts parameters
+                search_url = f"https://www.glassdoor.co.in/Job/jobs.htm?sc.keyword={keywords.replace(' ', '+')}&locT=C&locId=115"
                 
-                search_url = f"https://www.glassdoor.co.in/Job/india-{keyword_slug}-jobs-SRCH_IL.0,5_IN115.htm"
+                await playwright_manager.navigate(page, search_url, wait_for="load")
                 
-                await playwright_manager.navigate(page, search_url)
-                await page.wait_for_timeout(3000)
+                try:
+                    await page.wait_for_selector("[data-test='jobListing'], .JobCard, .JobsList_jobListItem__", timeout=15000)
+                except:
+                    self.logger.warning("Glassdoor timeout waiting for job listings.")
+                
+                # Scroll to load more
+                await page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+                await page.wait_for_timeout(2000)
                 
                 raw_jobs = await page.evaluate("""
                     () => {
                         const jobs = [];
-                        const cards = document.querySelectorAll('[data-test="jobListing"], .JobCard, li[data-id]');
+                        const cards = document.querySelectorAll('[data-test="jobListing"], .JobCard, li[data-id], [class*="jobListItem"]');
                         
                         cards.forEach((card, idx) => {
-                            if (idx < 25) {
-                                const titleEl = card.querySelector('[data-test="job-title"], .jobTitle');
-                                const companyEl = card.querySelector('[data-test="employer-name"], .employerName');
-                                const locationEl = card.querySelector('[data-test="emp-location"], .location');
-                                const linkEl = card.querySelector('a[data-test="job-title"], a[href*="/job-listing"]');
+                            if (idx < 30) {
+                                const titleEl = card.querySelector('[data-test="job-title"], .jobTitle, [class*="jobTitle"]');
+                                const companyEl = card.querySelector('[data-test="employer-name"], .employerName, [class*="employerName"]');
+                                const locationEl = card.querySelector('[data-test="emp-location"], .location, [class*="location"]');
+                                const linkEl = card.querySelector('a[data-test="job-link"], a[href*="/job-listing"], a[class*="JobCard_jobTitle"]');
+                                const dateEl = card.querySelector('[data-test="job-age"], [class*="jobAge"]');
                                 
                                 if (titleEl) {
                                     const href = linkEl?.href || '';
@@ -57,7 +65,10 @@ class GlassdoorAgent(IntelligentJobDiscoveryAgent):
                                         role: titleEl.textContent?.trim() || '',
                                         company: companyEl?.textContent?.trim() || '',
                                         location: locationEl?.textContent?.trim() || '',
+                                        experience_required: '',
                                         job_url: href.startsWith('http') ? href : 'https://www.glassdoor.co.in' + href,
+                                        job_description: '', // Desc usually needs click
+                                        posted_date: dateEl?.textContent?.trim() || 'Today',
                                         platform: 'glassdoor',
                                     });
                                 }
@@ -68,7 +79,9 @@ class GlassdoorAgent(IntelligentJobDiscoveryAgent):
                     }
                 """)
                 
-                # Intelligent filtering
+                self.logger.info(f"Glassdoor found {len(raw_jobs)} raw jobs")
+                
+                # Standardized intelligent filtering
                 for job in raw_jobs:
                     role_lower = job.get("role", "").lower()
                     
@@ -76,12 +89,23 @@ class GlassdoorAgent(IntelligentJobDiscoveryAgent):
                         continue
                     if "computer vision" in role_lower or "opencv" in role_lower:
                         continue
-                    if any(kw in role_lower for kw in ["senior", "staff", "principal"]):
+                    
+                    # Refined Junior-Friendly Filter
+                    exp_lower = job.get("experience_required", "").lower()
+                    is_junior_friendly = any(kw in exp_lower for kw in ["0", "1", "2", "fresher", "entry", "intern", "junior"])
+                    
+                    if any(kw in role_lower for kw in ["senior", "staff", "principal", "lead", "sr.", "manager"]):
+                        continue
+                        
+                    # Glassdoor list view mostly doesn't show exp, so we rely on role filter more
+                    # but if we have it, we use the refined logic
+                    has_high_exp = any(kw in exp_lower for kw in ["5", "6", "7", "8", "9", "5+", "8+", "10+"])
+                    if has_high_exp and not is_junior_friendly:
                         continue
                     
-                    ai_keywords = ["ai", "ml", "machine learning", "llm", "nlp", 
-                                  "deep learning", "genai", "data scientist"]
-                    if any(kw in role_lower for kw in ai_keywords) or "engineer" in role_lower:
+                    ai_keywords = ["ai", "ml", "machine learning", "llm", "nlp", "deep learning", "genai", "artificial intelligence", "data scientist"]
+                    search_kws = keywords.lower().split()
+                    if any(kw in role_lower for kw in ai_keywords) or any(kw in role_lower for kw in search_kws) or "engineer" in role_lower:
                         jobs.append(job)
                 
                 jobs = jobs[:max_results]

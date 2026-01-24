@@ -177,6 +177,26 @@ class IntelligentJobDiscoveryAgent(ABC):
                 role = job.get("role", "").lower()
                 company = job.get("company", "")
                 job_url = job.get("job_url", "")
+                posted_date = job.get("posted_date", "").lower()
+                
+                # STRICT DATE FILTERING: Only accept Today's jobs
+                is_fresh = False
+                if any(kw in posted_date for kw in ["just now", "today", "hour", "minute", "moments ago"]):
+                    is_fresh = True
+                elif "day ago" in posted_date or "days ago" in posted_date:
+                    # Exclude anything older than "0 days ago" or "today"
+                    # Some platforms say "1 day ago" for yesterday - EXCLUDE
+                     # But some might say "0 days ago" - KEEP
+                    if "0 days" in posted_date:
+                        is_fresh = True
+                    else:
+                        is_fresh = False
+                elif not posted_date:
+                    is_fresh = True  # If unclear, give benefit of doubt but mark low score
+                
+                if not is_fresh and posted_date:
+                    excluded_count += 1
+                    continue
                 
                 # Skip duplicates
                 if job_url in seen_urls:
@@ -192,24 +212,92 @@ class IntelligentJobDiscoveryAgent(ABC):
                     excluded_count += 1
                     continue
                 
-                # Check for senior roles
-                is_senior = any(
-                    kw in role 
-                    for kw in ["senior", "staff", "principal", "lead", "director", "vp"]
-                )
+                # Check for senior roles (STRICT: 1 year experience)
+                import re
+                
+                senior_indicators = ["senior", "staff", "principal", "lead", "director", "vp", "sr.", "manager"]
+                is_senior = any(kw in role for kw in senior_indicators)
+                
+                exp_req = job.get("experience_required", "").lower()
+                
+                # Smarter Extraction: Look for numbers followed by year/yrs/exp
+                # e.g. "2-4 years", "2 years", "exp: 2"
+                # This avoids "Job ID: 12345"
+                
+                # Try finding patterns like "X-Y years", "X years", "X+"
+                matches = re.findall(r'(\d+)\s*(?:-|\s*to\s*|\s*)\s*(\d*)', exp_req)
+                
+                min_exp = 0
+                max_exp = 0
+                
+                found_valid_exp = False
+                
+                if matches:
+                    # Filter out matches that look like years (2024) or IDs (large numbers)
+                    valid_matches = []
+                    for m in matches:
+                        n1 = int(m[0])
+                        n2 = int(m[1]) if m[1] else n1
+                        if n1 < 20 and n2 < 20: # Reasonable experience range
+                            valid_matches.append((n1, n2))
+                    
+                    if valid_matches:
+                        min_exp = valid_matches[0][0]
+                        max_exp = valid_matches[0][1]
+                        found_valid_exp = True
+                
+                # Fallback to simple digit if 'years' keyword is near (simple proximity check)
+                if not found_valid_exp and ("year" in exp_req or "exp" in exp_req):
+                     simple_digits = re.findall(r'\d+', exp_req)
+                     if simple_digits:
+                         val = int(simple_digits[0])
+                         if val < 20: 
+                             min_exp = val
+                             max_exp = val
+
+                # STRICT FILTERING
+                # Exclude if minimum is 3+ (e.g. 3-5, 4 years)
+                if min_exp >= 3:
+                    excluded_count += 1
+                    continue
+                
+                # Exclude if max is very high (e.g. 2-7 years - irrelevant)
+                # Allowing 2-4 for now as "stretch", but if user complains about 4y, maybe exclude max >= 5?
+                # User said "jobs with 4 years exp".
+                # If range is "2-5 years", that includes 4.
+                # Let's exclude if max >= 5.
+                if max_exp >= 5:
+                    excluded_count += 1
+                    continue
+                
+                # Explicit check for "4 years" text if parsing failed
+                if "4 years" in exp_req or "4+ years" in exp_req:
+                     if "0-4" not in exp_req and "1-4" not in exp_req and "2-4" not in exp_req:
+                         # e.g. "min 4 years"
+                         excluded_count += 1
+                         continue
+
+                # If explicitly 5+ years mentioned, exclude
+                if any(kw in exp_req for kw in ["5+", "8+", "10+", "5-", "6-", "7-", "8-"]):
+                    excluded_count += 1
+                    continue
+                
                 if is_senior:
                     excluded_count += 1
                     continue
                 
-                # Check relevance to AI/ML
+                # Check relevance to AI/ML (focused on your target roles)
                 ai_keywords = ["ai", "ml", "machine learning", "llm", "nlp", "deep learning",
-                              "data scientist", "genai", "generative"]
+                              "data scientist", "genai", "generative", "gen ai", 
+                              "ai developer", "ml developer", "ai engineer", "ml engineer",
+                              "deep learning engineer"]
                 is_relevant = any(kw in role for kw in ai_keywords)
                 
                 if not is_relevant:
-                    # Check if it's a generic engineering role
-                    if "engineer" in role or "developer" in role:
-                        is_relevant = True  # Include generic titles for now
+                    # Check if it's a generic engineering role with AI context
+                    if ("engineer" in role or "developer" in role) and \
+                       any(kw in role for kw in ["ai", "ml", "data", "nlp", "llm"]):
+                        is_relevant = True
                 
                 if is_relevant:
                     # Add quality score
@@ -222,8 +310,12 @@ class IntelligentJobDiscoveryAgent(ABC):
                             break
                     
                     # Boost for AI keywords
-                    if any(kw in role for kw in ["llm", "genai", "langchain"]):
+                    if any(kw in role for kw in ["llm", "genai", "langchain", "gen ai"]):
                         quality_score += 20
+                    
+                    # Boost for perfect experience match (0-2 years)
+                    if min_exp_required <= 1:
+                        quality_score += 10
                     
                     job["quality_score"] = min(quality_score, 100)
                     job["platform"] = job.get("platform", "unknown")
