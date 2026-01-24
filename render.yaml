@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: ai-job-agent
+    env: python
+    buildCommand: "./build.sh"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: GOOGLE_SHEETS_CREDENTIALS_PATH
+        value: "credentials.json"
+      - key: GOOGLE_SHEET_ID
+        sync: false
+      - key: SMTP_EMAIL
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: MIN_FIT_SCORE
+        value: "70"
+      - key: LOG_LEVEL
+        value: "INFO"
+    healthCheckPath: /

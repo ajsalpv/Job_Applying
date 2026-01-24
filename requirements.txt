@@ -1,28 +1,20 @@
 # Core Framework
-fastapi>=0.109.0
-# uvicorn[standard]==0.27.0
-uvicorn[standard]>=0.31.1
-
-# pydantic==2.5.3
-# pydantic-settings==2.1.0
-
-pydantic>=2.5.0
-pydantic-settings>=2.1.0
-
-# python-dotenv==1.0.0
-python-dotenv>=1.0.0
-
+fastapi==0.109.0
+uvicorn[standard]==0.40.0
+pydantic==2.11.10
+pydantic-settings==2.10.1
+python-dotenv==1.1.1
 
 # UI
-streamlit>=1.31.0
+streamlit==1.52.2
 
 # AI Agents & LLM
-langchain>=0.1.0
-langchain-community>=0.0.17
-langchain-groq>=0.0.1
-langgraph>=0.2.0
-crewai>=1.0.0
-groq>=0.4.0
+langchain==0.1.4
+langchain-community==0.0.17
+langchain-groq==0.0.1
+langgraph==0.2.2
+crewai==1.7.2
+groq==0.4.2
 
 # Browser Automation
 playwright==1.41.2
@@ -36,31 +28,16 @@ google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
 
 # Utilities
-requests==2.31.0
-# httpx==0.26.0
-httpx==0.27.2
-aiohttp==3.9.3
-tenacity==8.2.3
-python-dateutil==2.8.2
+requests==2.32.5
+httpx==0.28.1
+aiohttp==3.13.2
+tenacity==8.5.0
+python-dateutil==2.9.0.post0
 
 # Data Processing
-numpy
-pandas
-
-
-# Testing
-# pytest==8.0.0
-pytest==7.4.4
-# pytest-asyncio==0.23.4
-# pytest-mock==3.12.0
-pytest-asyncio==0.23.4
-pytest-mock==3.12.0
-
-# Development
-black==24.1.1
-flake8==7.0.0
-mypy==1.8.0
+numpy==1.26.4
+pandas==2.3.3
 
 # Logging & Monitoring
-loguru==0.7.2
-rich==13.7.0
+loguru==0.7.3
+rich==13.9.4
