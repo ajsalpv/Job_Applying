@@ -97,7 +97,7 @@ class TelegramService:
             self._send_message(chat_id, f"⏳ Sending application to *{email}* for *{position}*...")
             
             # Send using EmailSender
-            success = email_sender.send_application(
+            success, result_message = email_sender.send_application(
                 to_email=email,
                 position_name=position
             )
@@ -105,7 +105,7 @@ class TelegramService:
             if success:
                 self._send_message(chat_id, f"✅ Application Sent Successfully!\n\n📧 To: {email}\n💼 Role: {position}")
             else:
-                self._send_message(chat_id, f"❌ Failed to send email. Check server logs.")
+                self._send_message(chat_id, f"❌ Failed to send email:\n`{result_message}`")
         else:
             # Ignore other messages or provide help
             if text == "/help" or text == "/start":

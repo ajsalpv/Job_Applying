@@ -21,13 +21,15 @@ class EmailSender:
         self.email_address = self.settings.smtp_email
         self.email_password = self.settings.smtp_password
 
+    from typing import Tuple
+
     def send_application(
         self, 
         to_email: str, 
         position_name: str, 
         resume_path: str = "app/data/Ajsalpv_CV.pdf",
         cover_letter_path: str = "app/data/cover_letter.txt"
-    ) -> bool:
+    ) -> Tuple[bool, str]:
         """
         Send job application email with attached resume and customized cover letter.
         
@@ -38,20 +40,22 @@ class EmailSender:
             cover_letter_path: Path to cover letter text template
             
         Returns:
-            True if sent successfully
+            (Success boolean, Error or success message string)
         """
         if not self.email_address or not self.email_password:
-            logger.error("SMTP credentials missing. Please set SMTP_EMAIL and SMTP_PASSWORD in .env")
-            return False
+            msg = "SMTP credentials missing. Please set SMTP_EMAIL and SMTP_PASSWORD in .env"
+            logger.error(msg)
+            return False, msg
             
         if not os.path.exists(resume_path):
-            logger.error(f"Resume not found at {resume_path}")
-            return False
+            msg = f"Resume not found at {resume_path}. Make sure to commit it to Git."
+            logger.error(msg)
+            return False, msg
             
         if not os.path.exists(cover_letter_path):
-            logger.error(f"Cover letter template not found at {cover_letter_path}")
-            # Fallback could be implemented, but for now strict fail
-            return False
+            msg = f"Cover letter template not found at {cover_letter_path}. Make sure to commit it to Git."
+            logger.error(msg)
+            return False, msg
 
         try:
             # 1. Prepare Content
@@ -59,41 +63,34 @@ class EmailSender:
                 template_content = f.read()
             
             # Smart Replacement Logic
-            # User provided: "Artificial Intelligence Engineer (AI Automation)" is the placeholder phrase logic
             target_phrase = "Artificial Intelligence Engineer (AI Automation)"
             
             if target_phrase in template_content:
                 body_content = template_content.replace(target_phrase, position_name)
             else:
-                # Fallback: Just try to replace [Position] if they used that, or warn
                 body_content = template_content.replace("[Position]", position_name)
                 if target_phrase not in template_content:
-                    logger.warning(f"Target phrase '{target_phrase}' not found in template. No replacement made or fallbacks used.")
+                    logger.warning(f"Target phrase '{target_phrase}' not found in template.")
             
-            # 2. Setup Message (Support HTML for bold/bullets)
+            # 2. Setup Message
             msg = MIMEMultipart('alternative')
             msg['From'] = self.email_address
             msg['To'] = to_email
             msg['Subject'] = f"Application for {position_name} - Ajsal PV"
             
-            # Create HTML version of body
             html_content = body_content.replace("\n", "<br>")
-            # Convert **bold** to <b>bold</b>
             import re
             html_content = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', html_content)
             
-            # Attach both plain and HTML versions
             msg.attach(MIMEText(body_content, 'plain'))
             msg.attach(MIMEText(html_content, 'html'))
             
-            # Create a main container for attachments
             main_msg = MIMEMultipart()
             main_msg['From'] = msg['From']
             main_msg['To'] = msg['To']
             main_msg['Subject'] = msg['Subject']
             main_msg.attach(msg)
             
-            # Attach Resume
             with open(resume_path, "rb") as f:
                 attach = MIMEApplication(f.read(), _subtype="pdf")
                 attach.add_header('Content-Disposition', 'attachment', filename="Ajsal_PV_Resume.pdf")
@@ -102,18 +99,24 @@ class EmailSender:
             # 3. Send via SMTP with TLS
             logger.info(f"Connecting to SMTP {self.smtp_server}...")
             server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-            server.starttls() # Secure connection
+            server.starttls()
             server.login(self.email_address, self.email_password)
             
             text = main_msg.as_string()
             server.sendmail(self.email_address, to_email, text)
             server.quit()
             
-            logger.info(f"Email sent successfully to {to_email} for {position_name}")
-            return True
+            success_msg = f"Email sent successfully to {to_email} for {position_name}"
+            logger.info(success_msg)
+            return True, success_msg
             
+        except smtplib.SMTPAuthenticationError:
+            msg = "SMTP Authentication failed. Check if your App Password is correct."
+            logger.error(msg)
+            return False, msg
         except Exception as e:
-            logger.error(f"Failed to send email: {e}")
-            return False
+            msg = f"Failed to send email: {str(e)}"
+            logger.error(msg)
+            return False, msg
 
 email_sender = EmailSender()

@@ -34,6 +34,20 @@ async def lifespan(app: FastAPI):
     # Start background scheduler
     await scheduler.start()
     
+    # Verify required files for Email Bot
+    import os
+    resume_path = "app/data/Ajsalpv_CV.pdf"
+    cl_path = "app/data/cover_letter.txt"
+    if os.path.exists(resume_path):
+        logger.info(f"✅ Resume found: {resume_path}")
+    else:
+        logger.error(f"❌ Resume MISSING: {resume_path}")
+        
+    if os.path.exists(cl_path):
+        logger.info(f"✅ Cover letter found: {cl_path}")
+    else:
+        logger.error(f"❌ Cover letter MISSING: {cl_path}")
+
     # Start Telegram Listener
     asyncio.create_task(telegram_service.start_polling())
     
