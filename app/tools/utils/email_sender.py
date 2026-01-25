@@ -97,40 +97,48 @@ class EmailSender:
                 attach.add_header('Content-Disposition', 'attachment', filename="Ajsalpv_CV.pdf")
                 main_msg.attach(attach)
             
-            # 3. Send with Retries
+            # 3. Send with Retries (Dual Port Strategy)
             import time
             max_retries = 3
-            retry_delay = 5 # seconds
+            retry_delay = 5
             
             for attempt in range(max_retries):
+                # Try 465 on attempt 1 & 3, try 587 on attempt 2
+                current_port = 465 if attempt != 1 else 587
                 try:
-                    logger.info(f"Connecting to SMTP {self.smtp_server}:{self.smtp_port} (SSL)... Attempt {attempt + 1}")
-                    server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, timeout=self.timeout)
+                    if current_port == 465:
+                        logger.info(f"Connecting to SMTP {self.smtp_server}:{current_port} (SSL)... Attempt {attempt + 1}")
+                        server = smtplib.SMTP_SSL(self.smtp_server, current_port, timeout=self.timeout)
+                    else:
+                        logger.info(f"Connecting to SMTP {self.smtp_server}:{current_port} (TLS Fallback)... Attempt {attempt + 1}")
+                        server = smtplib.SMTP(self.smtp_server, current_port, timeout=self.timeout)
+                        server.starttls()
+                    
                     server.login(self.email_address, self.email_password)
                     
                     text = main_msg.as_string()
                     server.sendmail(self.email_address, to_email, text)
                     server.quit()
                     
-                    success_msg = f"Email sent successfully to {to_email} for {position_name}"
+                    success_msg = f"Email sent successfully to {to_email} via Port {current_port}"
                     logger.info(success_msg)
                     return True, success_msg
                     
                 except smtplib.SMTPAuthenticationError:
-                    msg = "SMTP Authentication failed. Check if your App Password is correct."
+                    msg = "Gmail Authentication failed. PLEASE CHECK: 1. Is SMTP_EMAIL correct? 2. Is it a 16-digit APP PASSWORD?"
                     logger.error(msg)
                     return False, msg
-                except (os.error, smtplib.SMTPException, Exception) as e:
-                    logger.warning(f"SMTP attempt {attempt + 1} failed: {e}")
+                except Exception as e:
+                    logger.warning(f"SMTP attempt {attempt + 1} on Port {current_port} failed: {e}")
                     if attempt < max_retries - 1:
                         time.sleep(retry_delay)
                         continue
-                    raise # Re-raise to be caught by outer except
+                    raise
             
-            return False, "Failed to send email after retries"
+            return False, "Failed to send email after multiple network attempts."
 
         except Exception as e:
-            msg = f"Failed to send email: {str(e)}"
+            msg = f"Critical Error: {str(e)}"
             logger.error(msg)
             return False, msg
 
