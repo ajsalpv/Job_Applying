@@ -97,26 +97,40 @@ class EmailSender:
                 attach.add_header('Content-Disposition', 'attachment', filename="Ajsal_PV_Resume.pdf")
                 main_msg.attach(attach)
             
-            # 3. Send via SMTP with SSL (Port 465)
-            logger.info(f"Connecting to SMTP {self.smtp_server}:{self.smtp_port} (SSL)...")
-            # Using SMTP_SSL for Port 465
-            server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, timeout=self.timeout)
-            server.login(self.email_address, self.email_password)
+            # 3. Send with Retries
+            import time
+            max_retries = 3
+            retry_delay = 5 # seconds
             
-            text = main_msg.as_string()
-            server.sendmail(self.email_address, to_email, text)
-            server.quit()
+            for attempt in range(max_retries):
+                try:
+                    logger.info(f"Connecting to SMTP {self.smtp_server}:{self.smtp_port} (SSL)... Attempt {attempt + 1}")
+                    server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, timeout=self.timeout)
+                    server.login(self.email_address, self.email_password)
+                    
+                    text = main_msg.as_string()
+                    server.sendmail(self.email_address, to_email, text)
+                    server.quit()
+                    
+                    success_msg = f"Email sent successfully to {to_email} for {position_name}"
+                    logger.info(success_msg)
+                    return True, success_msg
+                    
+                except smtplib.SMTPAuthenticationError:
+                    msg = "SMTP Authentication failed. Check if your App Password is correct."
+                    logger.error(msg)
+                    return False, msg
+                except (os.error, smtplib.SMTPException, Exception) as e:
+                    logger.warning(f"SMTP attempt {attempt + 1} failed: {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        continue
+                    raise # Re-raise to be caught by outer except
             
-            success_msg = f"Email sent successfully to {to_email} for {position_name}"
-            logger.info(success_msg)
-            return True, success_msg
-            
-        except smtplib.SMTPAuthenticationError:
-            msg = "SMTP Authentication failed. Check if your App Password is correct."
-            logger.error(msg)
-            return False, msg
-        except (os.error, smtplib.SMTPException, Exception) as e:
-            msg = f"Network or SMTP error: {str(e)}. (Intermittent network unreachable issues are common on cloud free tiers)"
+            return False, "Failed to send email after retries"
+
+        except Exception as e:
+            msg = f"Failed to send email: {str(e)}"
             logger.error(msg)
             return False, msg
 

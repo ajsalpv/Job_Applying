@@ -43,18 +43,21 @@ class PlaywrightManager:
                         "--disable-blink-features=AutomationControlled",
                         "--disable-dev-shm-usage",
                         "--no-sandbox",
+                        "--disable-gpu", # Optimization for cloud
+                        "--single-process", # Save memory
+                        "--js-flags=\"--max-old-space-size=256\"", # Target RAM limit
                     ]
                 )
-                logger.info("Browser launched")
+                logger.info("Browser launched with memory optimizations")
             return self._browser
 
     
     async def _get_context(self) -> BrowserContext:
-        """Get or create browser context with stealth settings"""
+        """Get or create browser context with stealth and resource blocking"""
         if self._context is None:
             browser = await self._get_browser()
             self._context = await browser.new_context(
-                viewport={"width": 1920, "height": 1080},
+                viewport={"width": 1280, "height": 720}, # Smaller viewport to save RAM
                 user_agent=(
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -65,22 +68,22 @@ class PlaywrightManager:
                 timezone_id="Asia/Kolkata",
             )
             
+            # RESOURCE BLOCKING: Skip images, fonts, media to save 50%+ RAM
+            async def block_aggressively(route):
+                if route.request.resource_type in ["image", "media", "font", "stylesheet"]:
+                    # We might need some stylesheets for basic layout, but blocking them is safest for RAM
+                    # For now keep stylesheets but block the big ones
+                    await route.abort()
+                else:
+                    await route.continue_()
+            
+            # Simple version: block images, media, fonts
+            await self._context.route("**/*", 
+                lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+
             # Add stealth scripts
             await self._context.add_init_script("""
-                // Override webdriver detection
-                Object.defineProperty(navigator, 'webdriver', {
-                    get: () => undefined
-                });
-                
-                // Override plugins
-                Object.defineProperty(navigator, 'plugins', {
-                    get: () => [1, 2, 3, 4, 5]
-                });
-                
-                // Override languages
-                Object.defineProperty(navigator, 'languages', {
-                    get: () => ['en-US', 'en']
-                });
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
             """)
             
         return self._context

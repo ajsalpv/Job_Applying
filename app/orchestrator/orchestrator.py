@@ -86,6 +86,11 @@ async def discover_jobs(state: WorkflowState) -> WorkflowState:
                             logger.info(f"✅ {platform_name} found {len(jobs)} jobs for '{keyword}' in {location}")
                     except Exception as e:
                         logger.error(f"❌ Error on {platform_name} for {keyword} in {location}: {e}")
+            
+            # Explicitly kill browser after this platform to free all RAM for the next platform
+            from app.tools.browser import playwright_manager
+            await playwright_manager.close()
+            
             return platform_jobs
 
     logger.info(f"📍 Target Locations: {', '.join(locations)}")
@@ -94,7 +99,7 @@ async def discover_jobs(state: WorkflowState) -> WorkflowState:
     search_tasks = [search_platform(p) for p in platforms]
     results = await asyncio.gather(*search_tasks)
     
-    # Combine results
+    # Combined results
     for platform_result in results:
         all_jobs.extend(platform_result)
     

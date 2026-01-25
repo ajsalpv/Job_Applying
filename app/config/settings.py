@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
 
     # Scheduling
-    check_interval_minutes: float = Field(default=30.0, env="CHECK_INTERVAL_MINUTES")
+    check_interval_minutes: float = Field(default=120.0, env="CHECK_INTERVAL_MINUTES")
 
     # Notifications
     telegram_bot_token: str = Field(default="8380477714:AAEB790RVdawDIzOWupFl191cbIJ7dH1yqo", env="TELEGRAM_BOT_TOKEN")
