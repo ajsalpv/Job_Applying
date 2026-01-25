@@ -94,7 +94,7 @@ class EmailSender:
             
             with open(resume_path, "rb") as f:
                 attach = MIMEApplication(f.read(), _subtype="pdf")
-                attach.add_header('Content-Disposition', 'attachment', filename="Ajsal_PV_Resume.pdf")
+                attach.add_header('Content-Disposition', 'attachment', filename="Ajsalpv_CV.pdf")
                 main_msg.attach(attach)
             
             # 3. Send with Retries
