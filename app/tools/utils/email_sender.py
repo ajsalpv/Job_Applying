@@ -17,9 +17,10 @@ class EmailSender:
     def __init__(self):
         self.settings = get_settings()
         self.smtp_server = "smtp.gmail.com"
-        self.smtp_port = 587
+        self.smtp_port = 465 # Switch to Port 465 for SSL (more stable on Render)
         self.email_address = self.settings.smtp_email
         self.email_password = self.settings.smtp_password
+        self.timeout = 30 # 30 second timeout for network operations
 
     from typing import Tuple
 
@@ -96,10 +97,10 @@ class EmailSender:
                 attach.add_header('Content-Disposition', 'attachment', filename="Ajsal_PV_Resume.pdf")
                 main_msg.attach(attach)
             
-            # 3. Send via SMTP with TLS
-            logger.info(f"Connecting to SMTP {self.smtp_server}...")
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-            server.starttls()
+            # 3. Send via SMTP with SSL (Port 465)
+            logger.info(f"Connecting to SMTP {self.smtp_server}:{self.smtp_port} (SSL)...")
+            # Using SMTP_SSL for Port 465
+            server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, timeout=self.timeout)
             server.login(self.email_address, self.email_password)
             
             text = main_msg.as_string()
@@ -114,8 +115,8 @@ class EmailSender:
             msg = "SMTP Authentication failed. Check if your App Password is correct."
             logger.error(msg)
             return False, msg
-        except Exception as e:
-            msg = f"Failed to send email: {str(e)}"
+        except (os.error, smtplib.SMTPException, Exception) as e:
+            msg = f"Network or SMTP error: {str(e)}. (Intermittent network unreachable issues are common on cloud free tiers)"
             logger.error(msg)
             return False, msg
 

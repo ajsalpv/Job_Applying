@@ -59,35 +59,37 @@ async def discover_jobs(state: WorkflowState) -> WorkflowState:
     # Limit concurrency to 1 platform at once to avoid OOM on Render Free tier (512MB RAM)
     semaphore = asyncio.Semaphore(1)
     
+    # Run for each platform
     async def search_platform(platform_name: str):
         async with semaphore:
             platform_jobs = []
             agent = PLATFORM_AGENTS.get(platform_name)
 
-        if not agent:
-            logger.warning(f"Unknown platform: {platform_name}")
-            return []
-            
-        for location in locations:
-            for keyword in keywords_list:
-                try:
-                    logger.info(f"🔍 Searching {platform_name} for '{keyword}' in {location}...")
-                    result = await agent.run(keywords=keyword, location=location)
-                    
-                    if result.success and result.data:
-                        jobs = result.data.get("jobs", [])
-                        for job in jobs:
-                            url = job.get("job_url")
-                            if url and url not in seen_urls:
-                                seen_urls.add(url)
-                                platform_jobs.append(job)
+            if not agent:
+                logger.warning(f"Unknown platform: {platform_name}")
+                return []
+                
+            for location in locations:
+                for keyword in keywords_list:
+                    try:
+                        logger.info(f"🔍 [{platform_name}] Searching '{keyword}' in {location}...")
+                        result = await agent.run(keywords=keyword, location=location)
                         
-                        logger.info(f"✅ {platform_name} found {len(jobs)} jobs for '{keyword}' in {location}")
-                except Exception as e:
-                    logger.error(f"❌ Error on {platform_name} for {keyword} in {location}: {e}")
-        return platform_jobs
+                        if result.success and result.data:
+                            jobs = result.data.get("jobs", [])
+                            for job in jobs:
+                                url = job.get("job_url")
+                                if url and url not in seen_urls:
+                                    seen_urls.add(url)
+                                    platform_jobs.append(job)
+                            
+                            logger.info(f"✅ {platform_name} found {len(jobs)} jobs for '{keyword}' in {location}")
+                    except Exception as e:
+                        logger.error(f"❌ Error on {platform_name} for {keyword} in {location}: {e}")
+            return platform_jobs
 
-    # Run searches for all platforms in parallel
+    logger.info(f"📍 Target Locations: {', '.join(locations)}")
+    # Run searches for all platforms - semaphore ensures they run one-by-one
     logger.info(f"🚀 Triggering search on {len(platforms)} platforms: {', '.join(platforms)}")
     search_tasks = [search_platform(p) for p in platforms]
     results = await asyncio.gather(*search_tasks)
