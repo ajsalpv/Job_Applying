@@ -56,8 +56,8 @@ async def discover_jobs(state: WorkflowState) -> WorkflowState:
     all_jobs = []
     seen_urls = set()
     
-    # Limit concurrency to 3 platforms at once to avoid system overload
-    semaphore = asyncio.Semaphore(3)
+    # Limit concurrency to 1 platform at once to avoid OOM on Render Free tier (512MB RAM)
+    semaphore = asyncio.Semaphore(1)
     
     async def search_platform(platform_name: str):
         async with semaphore:
