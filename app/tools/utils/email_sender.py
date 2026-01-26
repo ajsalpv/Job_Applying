@@ -3,6 +3,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 import os
+import base64
 from app.config.settings import get_settings
 from app.tools.utils.logger import get_logger
 
@@ -71,10 +72,6 @@ class EmailSender:
                 logger.info(f"Using Official Gmail API (HTTP) for 100% Google Security...")
                 from google.oauth2.credentials import Credentials
                 from googleapiclient.discovery import build
-                import base64
-                from email.mime.multipart import MIMEMultipart
-                from email.mime.text import MIMEText
-                from email.mime.application import MIMEApplication
 
                 creds = Credentials.from_authorized_user_file(self.settings.gmail_token_path)
                 service = build('gmail', 'v1', credentials=creds)
@@ -108,7 +105,6 @@ class EmailSender:
             msg['From'] = self.email_address
             msg['To'] = to_email
             msg['Subject'] = f"Application for {position_name} - {self.settings.user_name}"
-            # ... rest of SMTP logic ... (Simplified for clarity in this view)
             
             import time
             max_retries = 3
@@ -145,11 +141,6 @@ class EmailSender:
                     raise e
             
             return False, f"Failed after {max_retries} SMTP attempts."
-
-        except Exception as e:
-            msg = f"Critical Error in Email Bot: {str(e)}"
-            logger.error(msg)
-            return False, msg
 
         except Exception as e:
             msg = f"Critical Error in Email Bot: {str(e)}"
