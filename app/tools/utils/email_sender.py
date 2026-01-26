@@ -16,11 +16,11 @@ class EmailSender:
     
     def __init__(self):
         self.settings = get_settings()
-        self.smtp_server = "smtp.gmail.com"
-        self.smtp_port = 465 # Switch to Port 465 for SSL (more stable on Render)
+        self.smtp_server = self.settings.smtp_server
+        self.smtp_port = self.settings.smtp_port
         self.email_address = self.settings.smtp_email
         self.email_password = self.settings.smtp_password
-        self.timeout = 30 # 30 second timeout for network operations
+        self.timeout = 60 # Extended timeout for slow cloud networks
 
     from typing import Tuple
 
@@ -63,82 +63,114 @@ class EmailSender:
             with open(cover_letter_path, 'r', encoding='utf-8') as f:
                 template_content = f.read()
             
-            # Smart Replacement Logic
             target_phrase = "Artificial Intelligence Engineer (AI Automation)"
+            body_content = template_content.replace(target_phrase, position_name) if target_phrase in template_content else template_content.replace("[Position]", position_name)
             
-            if target_phrase in template_content:
-                body_content = template_content.replace(target_phrase, position_name)
-            else:
-                body_content = template_content.replace("[Position]", position_name)
-                if target_phrase not in template_content:
-                    logger.warning(f"Target phrase '{target_phrase}' not found in template.")
-            
-            # 2. Setup Message
+            # --- METHOD 1: Official Gmail API (HTTP - Recommended for Render + Google Only) ---
+            if os.path.exists(self.settings.gmail_token_path):
+                logger.info(f"Using Official Gmail API (HTTP) for 100% Google Security...")
+                from google.oauth2.credentials import Credentials
+                from googleapiclient.discovery import build
+                import base64
+                from email.mime.multipart import MIMEMultipart
+                from email.mime.text import MIMEText
+                from email.mime.application import MIMEApplication
+
+                creds = Credentials.from_authorized_user_file(self.settings.gmail_token_path)
+                service = build('gmail', 'v1', credentials=creds)
+                
+                # Build Message
+                msg = MIMEMultipart()
+                msg['To'] = to_email
+                msg['Subject'] = f"Application for {position_name} - {self.settings.user_name}"
+                
+                # HTML Body
+                html_content = body_content.replace("\n", "<br>")
+                import re
+                html_content = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', html_content)
+                msg.attach(MIMEText(html_content, 'html'))
+                
+                # Attachment
+                with open(resume_path, "rb") as f:
+                    attach = MIMEApplication(f.read(), _subtype="pdf")
+                    attach.add_header('Content-Disposition', 'attachment', filename="Ajsalpv_CV.pdf")
+                    msg.attach(attach)
+                
+                raw_msg = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+                sent_msg = service.users().messages().send(userId='me', body={'raw': raw_msg}).execute()
+                
+                logger.info(f"Email sent via Gmail API: {sent_msg['id']}")
+                return True, "Email sent successfully via Official Gmail API (Safe & Free)!"
+
+            # --- METHOD 2: Resend API (HTTP Alternative) ---
+            if self.settings.resend_api_key:
+                logger.info(f"Using Resend API (HTTP)...")
+                import resend
+                resend.api_key = self.settings.resend_api_key
+                import base64
+                with open(resume_path, "rb") as f:
+                    resume_b64 = base64.b64encode(f.read()).decode("utf-8")
+                params = {
+                    "from": f"{self.settings.user_name} <onboarding@resend.dev>", 
+                    "to": [to_email],
+                    "subject": f"Application for {position_name} - {self.settings.user_name}",
+                    "html": body_content.replace("\n", "<br>"),
+                    "attachments": [{"filename": "Ajsalpv_CV.pdf", "content": resume_b64}]
+                }
+                resend.Emails.send(params)
+                return True, "Email sent via Resend API."
+
+            # --- METHOD 3: SMTP (Fallback for Local) ---
+            # Setup Message for SMTP
             msg = MIMEMultipart('alternative')
             msg['From'] = self.email_address
             msg['To'] = to_email
-            msg['Subject'] = f"Application for {position_name} - Ajsal PV"
+            msg['Subject'] = f"Application for {position_name} - {self.settings.user_name}"
+            # ... rest of SMTP logic ... (Simplified for clarity in this view)
             
-            html_content = body_content.replace("\n", "<br>")
-            import re
-            html_content = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', html_content)
-            
-            msg.attach(MIMEText(body_content, 'plain'))
-            msg.attach(MIMEText(html_content, 'html'))
-            
-            main_msg = MIMEMultipart()
-            main_msg['From'] = msg['From']
-            main_msg['To'] = msg['To']
-            main_msg['Subject'] = msg['Subject']
-            main_msg.attach(msg)
-            
-            with open(resume_path, "rb") as f:
-                attach = MIMEApplication(f.read(), _subtype="pdf")
-                attach.add_header('Content-Disposition', 'attachment', filename="Ajsalpv_CV.pdf")
-                main_msg.attach(attach)
-            
-            # 3. Send with Retries (Dual Port Strategy)
             import time
             max_retries = 3
-            retry_delay = 5
-            
             for attempt in range(max_retries):
-                # Try 465 on attempt 1 & 3, try 587 on attempt 2
-                current_port = 465 if attempt != 1 else 587
                 try:
-                    if current_port == 465:
-                        logger.info(f"Connecting to SMTP {self.smtp_server}:{current_port} (SSL)... Attempt {attempt + 1}")
-                        server = smtplib.SMTP_SSL(self.smtp_server, current_port, timeout=self.timeout)
+                    if self.smtp_port == 465:
+                        logger.info(f"Connecting to SMTP {self.smtp_server}:{self.smtp_port} (SSL)... Attempt {attempt + 1}")
+                        server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, timeout=self.timeout)
                     else:
-                        logger.info(f"Connecting to SMTP {self.smtp_server}:{current_port} (TLS Fallback)... Attempt {attempt + 1}")
-                        server = smtplib.SMTP(self.smtp_server, current_port, timeout=self.timeout)
+                        logger.info(f"Connecting to SMTP {self.smtp_server}:{self.smtp_port} (STARTTLS)... Attempt {attempt + 1}")
+                        server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=self.timeout)
                         server.starttls()
                     
                     server.login(self.email_address, self.email_password)
                     
-                    text = main_msg.as_string()
-                    server.sendmail(self.email_address, to_email, text)
+                    # Construct message for SMTP
+                    smtp_msg = MIMEMultipart()
+                    smtp_msg['From'] = self.email_address
+                    smtp_msg['To'] = to_email
+                    smtp_msg['Subject'] = f"Application for {position_name} - {self.settings.user_name}"
+                    smtp_msg.attach(MIMEText(body_content, 'plain'))
+                    with open(resume_path, "rb") as f:
+                        attach = MIMEApplication(f.read(), _subtype="pdf")
+                        attach.add_header('Content-Disposition', 'attachment', filename="Ajsalpv_CV.pdf")
+                        smtp_msg.attach(attach)
+
+                    server.sendmail(self.email_address, to_email, smtp_msg.as_string())
                     server.quit()
-                    
-                    success_msg = f"Email sent successfully to {to_email} via Port {current_port}"
-                    logger.info(success_msg)
-                    return True, success_msg
-                    
-                except smtplib.SMTPAuthenticationError:
-                    msg = "Gmail Authentication failed. PLEASE CHECK: 1. Is SMTP_EMAIL correct? 2. Is it a 16-digit APP PASSWORD?"
-                    logger.error(msg)
-                    return False, msg
+                    return True, f"Email sent via SMTP ({self.smtp_server})"
                 except Exception as e:
-                    logger.warning(f"SMTP attempt {attempt + 1} on Port {current_port} failed: {e}")
                     if attempt < max_retries - 1:
-                        time.sleep(retry_delay)
+                        time.sleep(5)
                         continue
-                    raise
+                    raise e
             
-            return False, "Failed to send email after multiple network attempts."
+            return False, f"Failed after {max_retries} SMTP attempts."
 
         except Exception as e:
-            msg = f"Critical Error: {str(e)}"
+            msg = f"Critical Error in Email Bot: {str(e)}"
+            logger.error(msg)
+            return False, msg
+
+        except Exception as e:
+            msg = f"Critical Error in Email Bot: {str(e)}"
             logger.error(msg)
             return False, msg
 

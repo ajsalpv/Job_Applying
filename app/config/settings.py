@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     telegram_chat_id: str = Field(default="1629864542", env="TELEGRAM_CHAT_ID")
     
     # SMTP Configuration
+    smtp_server: str = Field(default="smtp.gmail.com", env="SMTP_SERVER")
+    smtp_port: int = Field(default=587, env="SMTP_PORT")
     smtp_email: Optional[str] = Field(default=None, env="SMTP_EMAIL")
     smtp_password: Optional[str] = Field(default=None, env="SMTP_PASSWORD")
     
@@ -60,6 +62,11 @@ class Settings(BaseSettings):
         env="TARGET_ROLE"
     )
     experience_years: int = Field(default=2, env="EXPERIENCE_YEARS")
+    
+    # Email API (Recommended for Cloud)
+    resend_api_key: Optional[str] = Field(default=None, env="RESEND_API_KEY")
+    gmail_credentials_path: str = Field(default="gmail_credentials.json", env="GMAIL_CREDENTIALS_PATH")
+    gmail_token_path: str = Field(default="token.json", env="GMAIL_TOKEN_PATH")
     
     class Config:
         env_file = ".env"
