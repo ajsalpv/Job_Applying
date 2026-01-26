@@ -96,11 +96,14 @@ class TelegramService:
 
             self._send_message(chat_id, f"⏳ Sending application to *{email}* for *{position}*...")
             
-            # Send using EmailSender
-            success, result_message = email_sender.send_application(
-                to_email=email,
-                position_name=position
-            )
+            # Send using EmailSender in a background thread to avoid blocking polling
+            def sync_send():
+                return email_sender.send_application(
+                    to_email=email,
+                    position_name=position
+                )
+            
+            success, result_message = await asyncio.to_thread(sync_send)
             
             if success:
                 self._send_message(chat_id, f"✅ Application Sent Successfully!\n\n📧 To: {email}\n💼 Role: {position}")

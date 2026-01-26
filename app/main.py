@@ -48,6 +48,18 @@ async def lifespan(app: FastAPI):
     else:
         logger.error(f"❌ Cover letter MISSING: {cl_path}")
 
+    # Verify Gmail API Files
+    settings = get_settings()
+    if os.path.exists(settings.gmail_credentials_path):
+        logger.info(f"✅ Gmail Credentials found: {settings.gmail_credentials_path}")
+    else:
+        logger.warning(f"⚠️ Gmail Credentials MISSING: {settings.gmail_credentials_path} (Fallback to SMTP)")
+
+    if os.path.exists(settings.gmail_token_path):
+        logger.info(f"✅ Gmail Token found: {settings.gmail_token_path}")
+    else:
+        logger.warning(f"⚠️ Gmail Token MISSING: {settings.gmail_token_path} (Run generate_gmail_token.py locally!)")
+
     # Start Telegram Listener
     asyncio.create_task(telegram_service.start_polling())
     
