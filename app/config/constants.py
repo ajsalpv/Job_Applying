@@ -106,6 +106,9 @@ EXCLUDED_JOB_TITLES = [
     "CV Engineer",
     "Image Processing Engineer",
     "Video AI Engineer",
+    "Data Scientist",
+    "Data Science",
+    "Senior Data Scientist",
 ]
 
 

@@ -68,7 +68,9 @@ class EmailSender:
             body_content = template_content.replace(target_phrase, position_name) if target_phrase in template_content else template_content.replace("[Position]", position_name)
             
             # --- METHOD 1: Official Gmail API (HTTP - Recommended for Render + Google Only) ---
+            token_abs_path = os.path.abspath(self.settings.gmail_token_path)
             if os.path.exists(self.settings.gmail_token_path):
+                logger.info(f"✅ Found Gmail Token at: {token_abs_path}")
                 logger.info(f"Using Official Gmail API (HTTP) for 100% Google Security...")
                 from google.oauth2.credentials import Credentials
                 from googleapiclient.discovery import build

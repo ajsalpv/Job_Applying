@@ -33,12 +33,11 @@ class IndeedAgent(IntelligentJobDiscoveryAgent):
         jobs = []
         
         try:
-            async with playwright_manager.get_page() as page:
                 search_url = (
                     f"https://in.indeed.com/jobs?"
                     f"q={keywords.replace(' ', '+')}"
                     f"&l={location.replace(' ', '+')}"
-                    f"&fromage=7"  # Last 7 days
+                    f"&fromage=1"  # Last 24 hours
                 )
                 
                 await playwright_manager.navigate(page, search_url, wait_for="load")

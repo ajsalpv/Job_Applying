@@ -44,7 +44,7 @@ PLATFORM_AGENTS = {
 
 async def discover_jobs(state: WorkflowState) -> WorkflowState:
     """Node: Discover jobs from all platforms in parallel"""
-    logger.info("Starting parallel job discovery")
+    logger.info("Starting parallel job discovery with persistent deduplication")
     
     # Parse multiple keywords and locations
     platforms = state.get("platforms", list(PLATFORM_AGENTS.keys()))
@@ -52,9 +52,22 @@ async def discover_jobs(state: WorkflowState) -> WorkflowState:
     keywords_list = [k.strip() for k in raw_keywords.split(",")] if "," in raw_keywords else [raw_keywords]
     locations = state.get("locations", ["Bangalore"])
     
-    # Track seen job URLs to avoid duplicates
-    all_jobs = []
+    # LOAD PERSISTENT SEEN URLS
+    import os, json
+    data_dir = "app/data"
+    os.makedirs(data_dir, exist_ok=True)
+    seen_urls_path = os.path.join(data_dir, "seen_urls.json")
+    
     seen_urls = set()
+    if os.path.exists(seen_urls_path):
+        try:
+            with open(seen_urls_path, 'r') as f:
+                seen_urls = set(json.load(f))
+            logger.info(f"Loaded {len(seen_urls)} already seen URLs from cache")
+        except Exception as e:
+            logger.warning(f"Could not load seen_urls cache: {e}")
+
+    all_jobs = []
     
     # Limit concurrency to 1 platform at once to avoid OOM on Render Free tier (512MB RAM)
     semaphore = asyncio.Semaphore(1)
@@ -77,13 +90,15 @@ async def discover_jobs(state: WorkflowState) -> WorkflowState:
                         
                         if result.success and result.data:
                             jobs = result.data.get("jobs", [])
+                            new_count = 0
                             for job in jobs:
                                 url = job.get("job_url")
                                 if url and url not in seen_urls:
                                     seen_urls.add(url)
                                     platform_jobs.append(job)
+                                    new_count += 1
                             
-                            logger.info(f"✅ {platform_name} found {len(jobs)} jobs for '{keyword}' in {location}")
+                            logger.info(f"✅ {platform_name} found {len(jobs)} jobs ({new_count} new) for '{keyword}' in {location}")
                     except Exception as e:
                         logger.error(f"❌ Error on {platform_name} for {keyword} in {location}: {e}")
             
@@ -103,7 +118,15 @@ async def discover_jobs(state: WorkflowState) -> WorkflowState:
     for platform_result in results:
         all_jobs.extend(platform_result)
     
-    logger.info(f"📊 Total discovery complete: {len(all_jobs)} unique jobs found across all platforms")
+    # SAVE PERSISTENT SEEN URLS
+    try:
+        with open(seen_urls_path, 'w') as f:
+            json.dump(list(seen_urls), f)
+        logger.info(f"Saved {len(seen_urls)} seen URLs to cache")
+    except Exception as e:
+        logger.error(f"Failed to save seen_urls cache: {e}")
+
+    logger.info(f"📊 Total discovery complete: {len(all_jobs)} NEW unique jobs found")
     
     return update_state(state, {
         "discovered_jobs": all_jobs,

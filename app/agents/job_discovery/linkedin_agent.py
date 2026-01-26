@@ -45,7 +45,7 @@ class LinkedInAgent(IntelligentJobDiscoveryAgent):
                     f"https://www.linkedin.com/jobs/search/?"
                     f"keywords={keywords.replace(' ', '%20')}"
                     f"&location={location.replace(' ', '%20')}"
-                    f"&f_TPR=r604800"  # Last 7 days
+                    f"&f_TPR=r86400"  # Last 24 hours
                     f"&position=1&pageNum=0"
                 )
                 
