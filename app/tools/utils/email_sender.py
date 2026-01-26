@@ -102,25 +102,7 @@ class EmailSender:
                 logger.info(f"Email sent via Gmail API: {sent_msg['id']}")
                 return True, "Email sent successfully via Official Gmail API (Safe & Free)!"
 
-            # --- METHOD 2: Resend API (HTTP Alternative) ---
-            if self.settings.resend_api_key:
-                logger.info(f"Using Resend API (HTTP)...")
-                import resend
-                resend.api_key = self.settings.resend_api_key
-                import base64
-                with open(resume_path, "rb") as f:
-                    resume_b64 = base64.b64encode(f.read()).decode("utf-8")
-                params = {
-                    "from": f"{self.settings.user_name} <onboarding@resend.dev>", 
-                    "to": [to_email],
-                    "subject": f"Application for {position_name} - {self.settings.user_name}",
-                    "html": body_content.replace("\n", "<br>"),
-                    "attachments": [{"filename": "Ajsalpv_CV.pdf", "content": resume_b64}]
-                }
-                resend.Emails.send(params)
-                return True, "Email sent via Resend API."
-
-            # --- METHOD 3: SMTP (Fallback for Local) ---
+            # --- METHOD 2: SMTP (Fallback for Local) ---
             # Setup Message for SMTP
             msg = MIMEMultipart('alternative')
             msg['From'] = self.email_address

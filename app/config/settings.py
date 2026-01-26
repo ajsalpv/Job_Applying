@@ -64,7 +64,6 @@ class Settings(BaseSettings):
     experience_years: int = Field(default=2, env="EXPERIENCE_YEARS")
     
     # Email API (Recommended for Cloud)
-    resend_api_key: Optional[str] = Field(default=None, env="RESEND_API_KEY")
     gmail_credentials_path: str = Field(default="gmail_credentials.json", env="GMAIL_CREDENTIALS_PATH")
     gmail_token_path: str = Field(default="token.json", env="GMAIL_TOKEN_PATH")
     
