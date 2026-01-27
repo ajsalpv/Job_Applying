@@ -1,9 +1,11 @@
 # 💎 ABSOLUTE STARTUP MARKER
 import os, sys, datetime
-print(f"💎 [BOOT] Process Initialization: {datetime.datetime.now()}", flush=True)
-print(f"💎 [BOOT] Python Version: {sys.version}", flush=True)
-print(f"💎 [BOOT] CWD: {os.getcwd()}", flush=True)
-print(f"💎 [BOOT] Env PORT: {os.environ.get('PORT', 'NOT SET')}", flush=True)
+# Raw system write to bypass ANY buffering
+os.write(1, b"\n\xe2\x99\xa6 [SYSTEM] Process initialization started\n")
+os.write(1, f"\xe2\x99\xa6 [SYSTEM] Python: {sys.version}\n".encode())
+os.write(1, f"\xe2\x99\xa6 [SYSTEM] Port: {os.environ.get('PORT', 'NOT SET')}\n".encode())
+
+print(f"💎 [BOOT] Starting at: {datetime.datetime.now()}", flush=True)
 
 try:
     import fastapi
@@ -19,16 +21,20 @@ from contextlib import asynccontextmanager
 try:
     from app.api.routes import router
     from app.config.settings import get_settings
+    # Quick sanity check on settings
+    s = get_settings()
+    print(f"💎 [BOOT] Settings loaded. User: {s.user_name}", flush=True)
+    
     from app.tools.browser import playwright_manager
     from app.tools.utils.logger import get_logger
     from app.orchestrator.scheduler import scheduler
     from app.tools.notifications.telegram_service import telegram_service
     print("💎 [BOOT] All internal modules loaded", flush=True)
 except Exception as e:
-    print(f"❌ [BOOT] CRITICAL: Module import failed: {e}", flush=True)
+    print(f"❌ [BOOT] CRITICAL: Component initialization failed: {e}", flush=True)
     import traceback
-    traceback.print_exc()
-    # Don't exit yet, let the process continue to show error in logs if possible
+    traceback.print_exc(file=sys.stdout)
+    sys.stdout.flush()
     
 import asyncio
 # Enforce proper event loop policy
