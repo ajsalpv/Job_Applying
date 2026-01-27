@@ -30,10 +30,18 @@ except Exception as e:
     traceback.print_exc()
     # Don't exit yet, let the process continue to show error in logs if possible
     
-# Enforce ProactorEventLoop on Windows for Playwright
+import asyncio
+# Enforce proper event loop policy
 if sys.platform == "win32":
-    import asyncio
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+else:
+    # Linux/Render
+    try:
+        if sys.version_info >= (3, 11):
+            # 3.11 defaults correctly but let's be explicit
+            asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+    except:
+        pass
 
 def log_memory():
     """Diagnostic helper to log current RAM usage on Linux/Render"""
@@ -56,6 +64,10 @@ logger = get_logger("main")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
+    # Force log flush on startup
+    sys.stdout.flush()
+    print("💎 [LIFESPAN] Starting...", flush=True)
+    log_memory()
     loop = asyncio.get_running_loop()
     logger.info(f"🚀 Starting AI Job Application Agent. Active Event Loop: {type(loop).__name__}")
     log_memory()
