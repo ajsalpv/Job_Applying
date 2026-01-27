@@ -1,22 +1,39 @@
-"""
-Main FastAPI Application Entry Point
-"""
-import sys
-import asyncio
+# 💎 ABSOLUTE STARTUP MARKER
+import os, sys, datetime
+print(f"💎 [BOOT] Process Initialization: {datetime.datetime.now()}", flush=True)
+print(f"💎 [BOOT] Python Version: {sys.version}", flush=True)
+print(f"💎 [BOOT] CWD: {os.getcwd()}", flush=True)
+print(f"💎 [BOOT] Env PORT: {os.environ.get('PORT', 'NOT SET')}", flush=True)
 
+try:
+    import fastapi
+    print(f"💎 [BOOT] FastAPI Version: {fastapi.__version__}", flush=True)
+    from fastapi import FastAPI
+    from fastapi.middleware.cors import CORSMiddleware
+except Exception as e:
+    print(f"❌ [BOOT] CRITICAL: FastAPI import failed: {e}", flush=True)
+    sys.exit(1)
+
+from contextlib import asynccontextmanager
+
+try:
+    from app.api.routes import router
+    from app.config.settings import get_settings
+    from app.tools.browser import playwright_manager
+    from app.tools.utils.logger import get_logger
+    from app.orchestrator.scheduler import scheduler
+    from app.tools.notifications.telegram_service import telegram_service
+    print("💎 [BOOT] All internal modules loaded", flush=True)
+except Exception as e:
+    print(f"❌ [BOOT] CRITICAL: Module import failed: {e}", flush=True)
+    import traceback
+    traceback.print_exc()
+    # Don't exit yet, let the process continue to show error in logs if possible
+    
 # Enforce ProactorEventLoop on Windows for Playwright
 if sys.platform == "win32":
+    import asyncio
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-from app.api.routes import router
-from app.config.settings import get_settings
-from app.tools.browser import playwright_manager
-from app.tools.utils.logger import get_logger
-from app.orchestrator.scheduler import scheduler
-from app.tools.notifications.telegram_service import telegram_service
 
 def log_memory():
     """Diagnostic helper to log current RAM usage on Linux/Render"""
@@ -143,15 +160,8 @@ async def root():
     }
 
 
-# 💎 STARTUP SEQUENCE
-import os, sys, asyncio
-print("💎 [BOOT] Process Loaded", flush=True)
-print(f"💎 [BOOT] Python: {sys.version.split()[0]}", flush=True)
-print(f"💎 [BOOT] Port: {os.environ.get('PORT', '8000')}", flush=True)
-
-
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
-    print(f"💎 [LAUNCH] Starting uvicorn on port {port}", flush=True)
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+    print(f"💎 [LAUNCH] Running main.py direct on port {port}", flush=True)
+    uvicorn.run(app, host="0.0.0.0", port=port)
