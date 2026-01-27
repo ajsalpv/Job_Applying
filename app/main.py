@@ -1,53 +1,47 @@
-# 💎 ABSOLUTE STARTUP MARKER
-import os, sys, datetime
-# Raw system write to bypass ANY buffering
-os.write(1, b"\n\xe2\x99\xa6 [SYSTEM] Process initialization started\n")
-os.write(1, f"\xe2\x99\xa6 [SYSTEM] Python: {sys.version}\n".encode())
-os.write(1, f"\xe2\x99\xa6 [SYSTEM] Port: {os.environ.get('PORT', 'NOT SET')}\n".encode())
+# 💎 TOTAL ENCLOSURE STARTUP
+import os, sys, datetime, traceback
 
-print(f"💎 [BOOT] Starting at: {datetime.datetime.now()}", flush=True)
+def raw_log(msg: str):
+    """Raw system write to bypass all buffering"""
+    try:
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        full_msg = f"\n\xe2\x99\xa6 [{timestamp}] {msg}\n"
+        os.write(1, full_msg.encode())
+    except:
+        pass
 
+raw_log("SYSTEM: Process bootstrap initiated")
+
+# Global Exception Catcher for imports
 try:
+    raw_log("BOOT: Loading core libraries...")
+    import asyncio
     import fastapi
-    print(f"💎 [BOOT] FastAPI Version: {fastapi.__version__}", flush=True)
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
-except Exception as e:
-    print(f"❌ [BOOT] CRITICAL: FastAPI import failed: {e}", flush=True)
-    sys.exit(1)
-
-from contextlib import asynccontextmanager
-
-try:
+    from contextlib import asynccontextmanager
+    
+    raw_log("BOOT: Loading internal modules...")
     from app.api.routes import router
     from app.config.settings import get_settings
-    # Quick sanity check on settings
-    s = get_settings()
-    print(f"💎 [BOOT] Settings loaded. User: {s.user_name}", flush=True)
-    
     from app.tools.browser import playwright_manager
     from app.tools.utils.logger import get_logger
     from app.orchestrator.scheduler import scheduler
     from app.tools.notifications.telegram_service import telegram_service
-    print("💎 [BOOT] All internal modules loaded", flush=True)
-except Exception as e:
-    print(f"❌ [BOOT] CRITICAL: Component initialization failed: {e}", flush=True)
-    import traceback
-    traceback.print_exc(file=sys.stdout)
-    sys.stdout.flush()
     
-import asyncio
-# Enforce proper event loop policy
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-else:
-    # Linux/Render
+    raw_log("BOOT: All modules loaded successfully")
+except Exception as e:
+    raw_log(f"CRITICAL ERROR DURING IMPORT: {e}")
+    traceback.print_exc(file=sys.stdout)
+    sys.exit(1)
+
+# Linux Event Loop Stability
+if sys.platform != "win32":
     try:
-        if sys.version_info >= (3, 11):
-            # 3.11 defaults correctly but let's be explicit
-            asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
-    except:
-        pass
+        asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+        raw_log("BOOT: Event loop policy set for Linux")
+    except Exception as e:
+        raw_log(f"WARNING: Could not set event loop policy: {e}")
 
 def log_memory():
     """Diagnostic helper to log current RAM usage on Linux/Render"""
@@ -184,13 +178,22 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
     try:
+        # Load settings for port
+        settings = get_settings()
         port = int(os.environ.get("PORT", 8000))
-        print(f"💎 [LAUNCH] Initializing Uvicorn on port {port}...", flush=True)
-        # We run the app object directly
-        uvicorn.run(app, host="0.0.0.0", port=port, log_level="info", access_log=True)
+        raw_log(f"LAUNCH: Starting Uvicorn on port {port}")
+        
+        # Standard uvicorn run
+        uvicorn.run(
+            "app.main:app", 
+            host="0.0.0.0", 
+            port=port, 
+            log_level="info",
+            access_log=True,
+            proxy_headers=True,
+            forwarded_allow_ips="*"
+        )
     except Exception as e:
-        print(f"❌ [LAUNCH] CRITICAL: Uvicorn failed to start: {e}", flush=True)
-        import traceback
+        raw_log(f"LAUNCH ERROR: {e}")
         traceback.print_exc(file=sys.stdout)
-        sys.stdout.flush()
         sys.exit(1)
