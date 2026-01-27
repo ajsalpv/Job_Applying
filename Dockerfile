@@ -17,6 +17,8 @@ RUN pip install --upgrade pip && \
 # Copy project files
 COPY . .
 
-# Start command with dynamic port
-# We use python app/main.py to ensure the __main__ block and our custom diagnostics run.
-CMD ["sh", "-c", "PYTHONPATH=. python app/main.py"]
+# Expose port
+EXPOSE 8000
+
+# Start command (Note: Render startCommand override in render.yaml will take precedence)
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

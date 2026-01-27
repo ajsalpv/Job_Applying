@@ -1,16 +1,16 @@
 # Core Framework
 fastapi==0.109.0
-uvicorn[standard]==0.40.0
-pydantic==2.11.10
-pydantic-settings==2.10.1
-python-dotenv==1.1.1
+uvicorn[standard]>=0.27.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
 
 # AI Agents & LLM
-langchain==1.0.7
-langchain-community==0.4.1
-langchain-groq==1.1.1
-langgraph==1.0.7
-groq==0.31.0
+langchain==0.1.4
+langchain-community==0.0.17
+langchain-groq==0.0.1
+langgraph==0.2.2
+groq==0.4.2
 
 # Browser Automation
 playwright==1.41.2
