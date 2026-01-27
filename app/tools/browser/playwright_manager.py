@@ -29,12 +29,18 @@ class PlaywrightManager:
         self._browser: Optional[Browser] = None
         self._playwright = None
         self._context: Optional[BrowserContext] = None
-        self._lock = asyncio.Lock()
+        self._lock = None
 
-    
+    @property
+    def lock(self) -> asyncio.Lock:
+        """Lazy lock initialization"""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
+
     async def _get_browser(self) -> Browser:
         """Get or create browser instance with lock protection"""
-        async with self._lock:
+        async with self.lock:
             if self._browser is None or not self._browser.is_connected():
                 self._playwright = await async_playwright().start()
                 self._browser = await self._playwright.chromium.launch(

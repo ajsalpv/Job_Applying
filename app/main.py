@@ -127,15 +127,20 @@ async def root():
     }
 
 
-# 💎 FIRST LINE OF LOGS
-import os, sys
-print("💎 PROCESS STARTING...")
-print(f"💎 Python Version: {sys.version}")
-print(f"💎 CWD: {os.getcwd()}")
-print(f"💎 PORT ENV: {os.environ.get('PORT', 'NOT SET')}")
+# 💎 ULTIMATE DEBUG START
+import os, sys, asyncio
+print("💎 PROCESS LOADED (main.py)", flush=True)
+
+# Immediate Telegram Ping (synchronous/background)
+from app.tools.notifications.telegram_notifier import notifier
+try:
+    notifier.send_notification("💎 Bot Process Started (main.py)")
+    print("💎 Initial Telegram ping sent", flush=True)
+except:
+    print("💎 Initial Telegram ping failed", flush=True)
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
-    print(f"💎 Final Port Check: {port}")
+    print(f"💎 Launching uvicorn on port {port}", flush=True)
     uvicorn.run(app, host="0.0.0.0", port=port)
