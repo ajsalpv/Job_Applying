@@ -52,9 +52,11 @@ class TelegramService:
         """Fetch updates from Telegram API"""
         params = {"offset": self.last_update_id, "timeout": 30}
         try:
-            # Using requests in async loop (blocking) - simple for now, 
-            # ideally use aiohttp but requests is already dependency
-            response = requests.get(f"{self.base_url}/getUpdates", params=params, timeout=40)
+            # Wrap blocking requests in a thread to keep event loop alive
+            def fetch():
+                return requests.get(f"{self.base_url}/getUpdates", params=params, timeout=40)
+            
+            response = await asyncio.to_thread(fetch)
             data = response.json()
             if data.get("ok"):
                 return data.get("result", [])
@@ -114,14 +116,25 @@ class TelegramService:
             if text == "/help" or text == "/start":
                 self._send_message(chat_id, "Commands:\n`email@example.com Position Name` - Send Application")
 
+    async def _send_message_async(self, chat_id, text):
+        """Reply to user asynchronously"""
+        def send():
+            try:
+                payload = {
+                    "chat_id": chat_id,
+                    "text": text,
+                    "parse_mode": "Markdown"
+                }
+                requests.post(f"{self.base_url}/sendMessage", json=payload, timeout=10)
+            except Exception as e:
+                logger.error(f"Failed to send Telegram reply: {e}")
+        
+        await asyncio.to_thread(send)
+
     def _send_message(self, chat_id, text):
-        """Reply to user"""
+        """Old sync method (kept for internal use but better use async)"""
         try:
-            payload = {
-                "chat_id": chat_id,
-                "text": text,
-                "parse_mode": "Markdown"
-            }
+            payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
             requests.post(f"{self.base_url}/sendMessage", json=payload, timeout=10)
         except Exception as e:
             logger.error(f"Failed to send Telegram reply: {e}")
