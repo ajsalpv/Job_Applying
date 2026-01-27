@@ -183,6 +183,14 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))
-    print(f"💎 [LAUNCH] Running main.py direct on port {port}", flush=True)
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    try:
+        port = int(os.environ.get("PORT", 8000))
+        print(f"💎 [LAUNCH] Initializing Uvicorn on port {port}...", flush=True)
+        # We run the app object directly
+        uvicorn.run(app, host="0.0.0.0", port=port, log_level="info", access_log=True)
+    except Exception as e:
+        print(f"❌ [LAUNCH] CRITICAL: Uvicorn failed to start: {e}", flush=True)
+        import traceback
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+        sys.exit(1)

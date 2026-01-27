@@ -2,7 +2,7 @@ services:
   - type: web
     name: ai-job-agent
     env: docker
-    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    startCommand: "PYTHONPATH=. python -m app.main"
     envVars:
       - key: GROQ_API_KEY
         sync: false
