@@ -3,7 +3,6 @@ Orchestrator - LangGraph workflow for job application pipeline
 """
 import asyncio
 from typing import Dict, Any, List
-from langgraph.graph import StateGraph, END
 from app.orchestrator.state_manager import (
     WorkflowState,
     WorkflowStep,
@@ -357,14 +356,24 @@ def create_workflow() -> StateGraph:
     workflow.add_edge("resume", "cover_letter")
     workflow.add_edge("cover_letter", "prepare")
     workflow.add_edge("prepare", "track")
+    from langgraph.graph import END
     workflow.add_edge("track", END)
 
-    
     return workflow
 
+# Global for lazy compilation
+_job_workflow = None
 
-# Compiled workflow
-job_workflow = create_workflow().compile()
+def get_job_workflow():
+    """Lazy compile job workflow to save memory"""
+    global _job_workflow
+    if _job_workflow is None:
+        _job_workflow = create_workflow().compile()
+    return _job_workflow
+
+
+# Compiled workflow (Now lazy)
+# job_workflow = get_job_workflow()
 
 
 async def run_discovery_phase(
@@ -386,7 +395,8 @@ async def run_discovery_phase(
     )
     
     # Run until human review pause
-    result = await job_workflow.ainvoke(initial_state)
+    workflow = get_job_workflow()
+    result = await workflow.ainvoke(initial_state)
     
     return result
 

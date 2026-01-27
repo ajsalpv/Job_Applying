@@ -15,6 +15,7 @@ raw_log("SYSTEM: Process bootstrap initiated")
 # Global Exception Catcher for imports
 try:
     raw_log("BOOT: Loading core libraries...")
+    raw_log("BOOT: Loading core libraries...")
     import asyncio
     import fastapi
     from fastapi import FastAPI
@@ -22,7 +23,8 @@ try:
     from contextlib import asynccontextmanager
     
     raw_log("BOOT: Loading internal modules...")
-    from app.api.routes import router
+    # We delay orchestrator imports to save RAM
+    # from app.api.routes import router
     from app.config.settings import get_settings
     from app.tools.browser import playwright_manager
     from app.tools.utils.logger import get_logger

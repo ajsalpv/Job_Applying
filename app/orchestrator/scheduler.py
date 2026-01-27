@@ -2,7 +2,6 @@
 Scheduler - Periodic job checking
 """
 import asyncio
-from app.orchestrator.orchestrator import run_discovery_phase
 from app.config.settings import get_settings
 from app.tools.utils.logger import get_logger
 
@@ -53,11 +52,11 @@ class Scheduler:
                 logger.info("⏰ Triggering periodic job discovery...")
                 
                 # Run discovery phase
+                from app.orchestrator.orchestrator import run_discovery_phase
                 search_locations = [loc.strip() for loc in self.settings.user_location.split(",")]
                 await run_discovery_phase(
                     locations=search_locations,
-                    keywords=self.settings.target_roles, # Also passing target roles as keywords? Or keep default?
-                    # run_discovery_phase takes "keywords: str" (single string?). Let's check orchestrator signature.
+                    keywords=self.settings.target_roles,
                 )
                 
                 logger.info("Periodic discovery finished")
