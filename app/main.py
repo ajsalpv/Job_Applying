@@ -118,11 +118,14 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(telegram_service.start_polling())
     
     # Notify user bot is live (in background to not block startup)
-    from app.tools.notifications.telegram_notifier import notifier
-    asyncio.create_task(asyncio.to_thread(
-        notifier.send_notification, 
-        "🚀 *AI Job Agent is LIVE on Render!*\n\nHealth Check: ✅\nScheduler: ✅\nTelegram Polling: ✅"
-    ))
+    try:
+        from app.tools.notifications.telegram_notifier import notifier
+        asyncio.create_task(asyncio.to_thread(
+            notifier.send_notification, 
+            "🚀 *AI Job Agent is LIVE on Render!*\n\nHealth Check: ✅\nScheduler: ✅\nTelegram Polling: ✅"
+        ))
+    except Exception as e:
+        print(f"⚠️ [LIFESPAN] Failed to send Telegram startup ping: {e}", flush=True)
     
     yield
     # Cleanup on shutdown

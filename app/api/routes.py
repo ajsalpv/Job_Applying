@@ -22,9 +22,6 @@ from app.api.schemas import (
 )
 from app.orchestrator import run_discovery_phase, run_application_phase, WorkflowState
 from app.orchestrator.scheduler import scheduler
-from app.agents.job_scoring import scoring_agent
-from app.agents.resume_generator import resume_agent, cover_letter_agent
-from app.agents.tracking import tracking_agent
 from app.tools.utils.logger import get_logger
 
 logger = get_logger("api")
@@ -136,6 +133,7 @@ async def approve_jobs(request: ApproveJobsRequest, background_tasks: Background
 async def generate_resume(request: GenerateContentRequest):
     """Generate optimized resume bullets for a specific job"""
     try:
+        from app.agents.resume_generator import resume_agent
         result = await resume_agent.generate_optimized_bullets(
             company=request.company,
             role=request.role,
@@ -159,6 +157,7 @@ async def generate_resume(request: GenerateContentRequest):
 async def generate_cover_letter(request: GenerateContentRequest):
     """Generate a cover letter for a specific job"""
     try:
+        from app.agents.resume_generator import cover_letter_agent
         letter = await cover_letter_agent.generate_cover_letter(
             company=request.company,
             role=request.role,
@@ -180,6 +179,7 @@ async def generate_cover_letter(request: GenerateContentRequest):
 async def get_stats():
     """Get application statistics"""
     try:
+        from app.agents.tracking import tracking_agent
         stats = await tracking_agent.get_statistics()
         
         return ApplicationStats(
@@ -201,6 +201,7 @@ async def get_stats():
 async def get_followups(days_threshold: int = 7):
     """Get applications needing follow-up"""
     try:
+        from app.agents.tracking import tracking_agent
         followups = await tracking_agent.get_pending_followups(days_threshold)
         
         items = [
@@ -225,6 +226,7 @@ async def get_followups(days_threshold: int = 7):
 async def update_status(request: UpdateStatusRequest):
     """Update application status"""
     try:
+        from app.agents.tracking import tracking_agent
         success = await tracking_agent.update_status(
             company=request.company,
             role=request.role,
@@ -246,6 +248,7 @@ async def update_status(request: UpdateStatusRequest):
 async def get_all_applications():
     """Get all applications details"""
     try:
+        from app.agents.tracking import tracking_agent
         apps = await tracking_agent.get_all_applications()
         
         items = []

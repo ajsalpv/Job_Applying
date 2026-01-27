@@ -5,15 +5,11 @@ pydantic==2.11.10
 pydantic-settings==2.10.1
 python-dotenv==1.1.1
 
-# UI
-streamlit==1.52.2
-
 # AI Agents & LLM
 langchain==1.0.7
 langchain-community==0.4.1
 langchain-groq==1.1.1
 langgraph==1.0.7
-crewai==1.7.2
 groq==0.31.0
 
 # Browser Automation
