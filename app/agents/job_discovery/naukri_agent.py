@@ -42,7 +42,7 @@ class NaukriAgent(IntelligentJobDiscoveryAgent):
                 # footer_freshness=7 (Last 7 days)
                 search_url = (
                     f"https://www.naukri.com/{keyword_slug}-jobs-in-{location_slug}"
-                    f"?experience=0&experience=1&experience=2&footer_freshness=7"
+                    f"?experience=0&experience=1&experience=2&footer_freshness=1"
                 )
                 
                 await playwright_manager.navigate(page, search_url)

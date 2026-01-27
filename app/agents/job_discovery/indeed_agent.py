@@ -33,6 +33,7 @@ class IndeedAgent(IntelligentJobDiscoveryAgent):
         jobs = []
         
         try:
+            async with playwright_manager.get_page() as page:
                 search_url = (
                     f"https://in.indeed.com/jobs?"
                     f"q={keywords.replace(' ', '+')}"

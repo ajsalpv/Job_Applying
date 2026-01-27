@@ -33,7 +33,7 @@ class GlassdoorAgent(IntelligentJobDiscoveryAgent):
         try:
             async with playwright_manager.get_page() as page:
                 # Use a more generic search URL that accepts parameters
-                search_url = f"https://www.glassdoor.co.in/Job/jobs.htm?sc.keyword={keywords.replace(' ', '+')}&locT=C&locId=115"
+                search_url = f"https://www.glassdoor.co.in/Job/jobs.htm?sc.keyword={keywords.replace(' ', '+')}&locT=C&locId=115&fromAge=1"
                 
                 await playwright_manager.navigate(page, search_url, wait_for="load")
                 

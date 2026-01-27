@@ -89,7 +89,6 @@ TARGET_JOB_TITLES = [
     "LLM Engineer",
     "NLP Engineer",
     "Deep Learning Engineer",
-    "Data Scientist",
     "Applied ML Engineer",
     "AI/ML Engineer",
     "GenAI Engineer",
