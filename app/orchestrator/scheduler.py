@@ -43,6 +43,11 @@ class Scheduler:
         
     async def _run_loop(self):
         """Main scheduling loop"""
+        # Initial delay to give the server time to pass health checks and stabilize
+        # before launching heavy browser tasks (OOM prevention on Render Free tier)
+        logger.info("⏳ Waiting 2 minutes for server stability before first scan...")
+        await asyncio.sleep(120)
+        
         while self._running:
             try:
                 logger.info("⏰ Triggering periodic job discovery...")

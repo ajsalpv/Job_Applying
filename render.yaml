@@ -2,9 +2,7 @@ services:
   - type: web
     name: ai-job-agent
     env: docker
-    # startCommand is optional for 'docker' env as it uses Dockerfile CMD
-    # but we'll set it correctly just in case
-    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    startCommand: "bash -c 'uvicorn app.main:app --host 0.0.0.0 --port $PORT'"
     envVars:
       - key: GROQ_API_KEY
         sync: false
