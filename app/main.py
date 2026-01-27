@@ -18,6 +18,21 @@ from app.tools.utils.logger import get_logger
 from app.orchestrator.scheduler import scheduler
 from app.tools.notifications.telegram_service import telegram_service
 
+def log_memory():
+    """Diagnostic helper to log current RAM usage on Linux/Render"""
+    try:
+        import os
+        with open("/proc/self/status", "r") as f:
+            lines = f.readlines()
+            for line in lines:
+                if "VmRSS" in line:
+                    mem = line.split(":")[1].strip()
+                    print(f"💎 [RAM] Current Usage: {mem}", flush=True)
+                    return mem
+    except:
+        pass
+    return "Unknown"
+
 logger = get_logger("main")
 
 
@@ -26,6 +41,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     loop = asyncio.get_running_loop()
     logger.info(f"🚀 Starting AI Job Application Agent. Active Event Loop: {type(loop).__name__}")
+    log_memory()
     
     if sys.platform == "win32" and not isinstance(loop, asyncio.ProactorEventLoop):
         logger.warning("🚨 REQUIRED ProactorEventLoop is NOT active! Playwright will fail.")

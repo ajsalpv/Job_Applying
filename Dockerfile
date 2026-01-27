@@ -11,9 +11,7 @@ WORKDIR /app
 # Install Python requirements
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt && \
-    playwright install chromium && \
-    playwright install-deps chromium
+    pip install -r requirements.txt
 
 # Copy project files
 COPY . .
@@ -22,4 +20,4 @@ COPY . .
 EXPOSE 8000
 
 # Start command with dynamic port
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "PYTHONPATH=. uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

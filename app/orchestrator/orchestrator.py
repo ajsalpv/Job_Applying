@@ -11,31 +11,30 @@ from app.orchestrator.state_manager import (
     update_state,
     add_error,
 )
-from app.agents.job_discovery import (
-    linkedin_agent, indeed_agent, naukri_agent,
-    glassdoor_agent, instahyre_agent, cutshort_agent,
-    wellfound_agent, hirist_agent,
-)
-from app.agents.job_scoring import scoring_agent
-from app.agents.resume_generator import resume_agent, cover_letter_agent
-from app.agents.application_assistant import application_agent
-from app.agents.tracking import tracking_agent
-from app.agents.interview_prep import interview_prep_agent
+# Delayed imports for memory efficiency on Cloud
+# Heavy agent imports moved inside functions to prevent OOM on startup
 from app.tools.utils.logger import get_logger
 
 logger = get_logger("orchestrator")
 
-# Map platform names to agents
-PLATFORM_AGENTS = {
-    "linkedin": linkedin_agent,
-    "indeed": indeed_agent,
-    "naukri": naukri_agent,
-    "glassdoor": glassdoor_agent,
-    "instahyre": instahyre_agent,
-    "cutshort": cutshort_agent,
-    "wellfound": wellfound_agent,
-    "hirist": hirist_agent,
-}
+def get_platform_agent(name: str):
+    """Lazy load discovery agents to save RAM"""
+    from app.agents.job_discovery import (
+        linkedin_agent, indeed_agent, naukri_agent,
+        glassdoor_agent, instahyre_agent, cutshort_agent,
+        wellfound_agent, hirist_agent
+    )
+    mapping = {
+        "linkedin": linkedin_agent,
+        "indeed": indeed_agent,
+        "naukri": naukri_agent,
+        "glassdoor": glassdoor_agent,
+        "instahyre": instahyre_agent,
+        "cutshort": cutshort_agent,
+        "wellfound": wellfound_agent,
+        "hirist": hirist_agent,
+    }
+    return mapping.get(name)
 
 
 # ============================================================
@@ -76,7 +75,7 @@ async def discover_jobs(state: WorkflowState) -> WorkflowState:
     async def search_platform(platform_name: str):
         async with semaphore:
             platform_jobs = []
-            agent = PLATFORM_AGENTS.get(platform_name)
+            agent = get_platform_agent(platform_name)
 
             if not agent:
                 logger.warning(f"Unknown platform: {platform_name}")
@@ -149,6 +148,7 @@ async def score_jobs(state: WorkflowState) -> WorkflowState:
         })
     
     try:
+        from app.agents.job_scoring import scoring_agent
         result = await scoring_agent.run(jobs=jobs, min_score=min_score)
         
         if result.success:
@@ -185,6 +185,7 @@ async def generate_resume_content(state: WorkflowState) -> WorkflowState:
         })
     
     try:
+        from app.agents.resume_generator import resume_agent
         result = await resume_agent.run(jobs=approved_jobs)
         
         if result.success:
@@ -215,6 +216,7 @@ async def generate_cover_letters(state: WorkflowState) -> WorkflowState:
         })
     
     try:
+        from app.agents.resume_generator import cover_letter_agent
         result = await cover_letter_agent.run(jobs=approved_jobs)
         
         if result.success:
@@ -245,6 +247,7 @@ async def prepare_applications(state: WorkflowState) -> WorkflowState:
         })
     
     try:
+        from app.agents.application_assistant import application_agent
         result = await application_agent.run(jobs=approved_jobs)
         
         if result.success:
@@ -269,6 +272,7 @@ async def track_applications(state: WorkflowState) -> WorkflowState:
     
     for job in scored_jobs:
         try:
+            from app.agents.tracking import tracking_agent
             await tracking_agent.log_application(
                 company=job.get("company", ""),
                 role=job.get("role", ""),
