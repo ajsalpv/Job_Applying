@@ -50,6 +50,14 @@ async def lifespan(app: FastAPI):
 
     # Verify Gmail API Files
     settings = get_settings()
+    
+    # Check for Groq Key
+    if not settings.groq_api_key:
+        logger.error("❌ CRITICAL: GROQ_API_KEY is missing! Bot will crash during job discovery.")
+        logger.info("👉 Please add GROQ_API_KEY to your Render Dashboard Environment Variables.")
+    else:
+        logger.info("✅ GROQ_API_KEY found.")
+
     if os.path.exists(settings.gmail_credentials_path):
         logger.info(f"✅ Gmail Credentials found: {settings.gmail_credentials_path}")
     else:
@@ -61,6 +69,7 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠️ Gmail Token MISSING: {settings.gmail_token_path} (Run generate_gmail_token.py locally!)")
 
     # Start Telegram Listener
+    logger.info("🚀 Starting Telegram Listener...")
     asyncio.create_task(telegram_service.start_polling())
     
     yield
@@ -94,11 +103,20 @@ app.include_router(router, prefix="/api", tags=["Jobs"])
 @app.get("/")
 async def root():
     """Root endpoint"""
+    settings = get_settings()
     return {
         "name": "AI Job Application Agent",
         "version": "1.0.0",
-        "docs": "/docs",
         "status": "running",
+        "scheduler": {
+            "running": scheduler._running,
+            "interval": f"{settings.check_interval_minutes} minutes"
+        },
+        "telegram_polling": telegram_service.running,
+        "diagnostics": {
+            "gmail_token": os.path.exists(settings.gmail_token_path),
+            "groq_key_configured": bool(settings.groq_api_key),
+        }
     }
 
 

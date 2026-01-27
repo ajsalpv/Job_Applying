@@ -44,7 +44,6 @@ class PlaywrightManager:
                         "--disable-dev-shm-usage",
                         "--no-sandbox",
                         "--disable-gpu", # Optimization for cloud
-                        "--single-process", # Save memory
                         "--js-flags=\"--max-old-space-size=256\"", # Target RAM limit
                     ]
                 )

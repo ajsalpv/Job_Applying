@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
     
     # LLM Configuration
-    groq_api_key: str = Field(..., env="GROQ_API_KEY")
+    groq_api_key: str = Field(default="", env="GROQ_API_KEY")
     
     # Model Selection
     fast_model: str = "llama3-8b-8192"  # For quick tasks (scoring, extraction)
