@@ -1,7 +1,7 @@
 """
 Logger - Loguru-based structured logging
 """
-import sys
+import os
 from loguru import logger
 from app.config.settings import get_settings
 
@@ -9,6 +9,9 @@ from app.config.settings import get_settings
 def setup_logger():
     """Configure loguru logger with custom format"""
     settings = get_settings()
+    
+    # Ensure logs directory exists to prevent crash in Docker/Linux
+    os.makedirs("logs", exist_ok=True)
     
     # Remove default handler
     logger.remove()

@@ -127,11 +127,15 @@ async def root():
     }
 
 
-import os
-print("💎 BOT STARTING: Initializing Python process...")
+# 💎 FIRST LINE OF LOGS
+import os, sys
+print("💎 PROCESS STARTING...")
+print(f"💎 Python Version: {sys.version}")
+print(f"💎 CWD: {os.getcwd()}")
+print(f"💎 PORT ENV: {os.environ.get('PORT', 'NOT SET')}")
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
-    print(f"💎 Launching uvicorn on port {port}")
+    print(f"💎 Final Port Check: {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)

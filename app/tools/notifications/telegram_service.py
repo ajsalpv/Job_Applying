@@ -57,9 +57,15 @@ class TelegramService:
                 return requests.get(f"{self.base_url}/getUpdates", params=params, timeout=40)
             
             response = await asyncio.to_thread(fetch)
+            if response.status_code != 200:
+                logger.debug(f"Telegram API responded with {response.status_code}: {response.text}")
+                return []
+
             data = response.json()
             if data.get("ok"):
                 return data.get("result", [])
+            else:
+                logger.debug(f"Telegram update failed: {data.get('description')}")
             return []
         except Exception:
             return []

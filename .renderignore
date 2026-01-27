@@ -19,5 +19,5 @@ get_chat_id.py
 init_sheet.py
 check_sig.py
 sig.txt
-credentials.json
-.env
+# credentials.json
+# .env
