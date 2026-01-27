@@ -288,6 +288,23 @@ async def start_scheduler():
     return {"message": "Scheduler started"}
 
 
+@router.post("/jobs/scan", response_model=APIResponse)
+async def scan_now(background_tasks: BackgroundTasks):
+    """Manually trigger job discovery"""
+    from app.config.settings import get_settings
+    settings = get_settings()
+    
+    async def run_scan():
+        search_locations = [loc.strip() for loc in settings.user_location.split(",")]
+        await run_discovery_phase(
+            locations=search_locations,
+            keywords=settings.target_roles,
+        )
+
+    background_tasks.add_task(run_scan)
+    return APIResponse(success=True, message="Job discovery scan started in background")
+
+
 @router.post("/scheduler/stop")
 async def stop_scheduler():
     """Stop the scheduler"""

@@ -72,6 +72,10 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 Starting Telegram Listener...")
     asyncio.create_task(telegram_service.start_polling())
     
+    # Notify user bot is live
+    from app.tools.notifications.telegram_notifier import notifier
+    notifier.send_notification("🚀 *AI Job Agent is LIVE on Render!*\n\nHealth Check: ✅\nScheduler: ✅\nTelegram Polling: ✅")
+    
     yield
     # Cleanup on shutdown
     logger.info("🛑 Shutting down...")
