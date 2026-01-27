@@ -185,9 +185,9 @@ if __name__ == "__main__":
         port = int(os.environ.get("PORT", 8000))
         raw_log(f"LAUNCH: Starting Uvicorn on port {port}")
         
-        # Standard uvicorn run
+        # Standard uvicorn run using the loaded app object
         uvicorn.run(
-            "app.main:app", 
+            app,  # Pass the object, not the string, to avoid re-imports
             host="0.0.0.0", 
             port=port, 
             log_level="info",

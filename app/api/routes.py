@@ -20,7 +20,7 @@ from app.api.schemas import (
     ApplicationListResponse,
     SchedulerStatus,
 )
-from app.orchestrator import run_discovery_phase, run_application_phase, WorkflowState
+from app.orchestrator.state_manager import WorkflowState
 from app.orchestrator.scheduler import scheduler
 from app.tools.utils.logger import get_logger
 
@@ -57,7 +57,8 @@ async def search_jobs(request: JobSearchRequest):
     logger.info(f"Starting job search: {request.keywords}")
     
     try:
-        # Run discovery phase
+        # Run discovery phase (Lazy Load)
+        from app.orchestrator import run_discovery_phase
         state = await run_discovery_phase(
             keywords=request.keywords,
             locations=request.locations,
@@ -109,7 +110,8 @@ async def approve_jobs(request: ApproveJobsRequest, background_tasks: Background
     logger.info(f"Approving {len(request.job_urls)} jobs")
     
     try:
-        # Continue workflow with approved jobs
+        # Continue workflow with approved jobs (Lazy Load)
+        from app.orchestrator import run_application_phase
         _workflow_state = await run_application_phase(
             state=_workflow_state,
             approved_jobs=request.job_urls,
@@ -298,6 +300,7 @@ async def scan_now(background_tasks: BackgroundTasks):
     settings = get_settings()
     
     async def run_scan():
+        from app.orchestrator import run_discovery_phase
         search_locations = [loc.strip() for loc in settings.user_location.split(",")]
         await run_discovery_phase(
             locations=search_locations,
