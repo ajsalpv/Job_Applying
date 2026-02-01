@@ -24,7 +24,7 @@ try:
     
     raw_log("BOOT: Loading internal modules...")
     # We delay orchestrator imports to save RAM
-    # from app.api.routes import router
+    from app.api.routes import router
     from app.config.settings import get_settings
     from app.tools.browser import playwright_manager
     from app.tools.utils.logger import get_logger
