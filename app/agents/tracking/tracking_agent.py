@@ -20,7 +20,7 @@ from app.tools.notifications.telegram_notifier import notifier
 # ============================================================
 
 @tool
-def log_new_application(
+async def log_new_application(
     company: str,
     role: str,
     platform: str,
@@ -53,7 +53,7 @@ def log_new_application(
             notes=f"Posted: {posted_date}",
         )
         
-        is_new = sheets_client.add_application(application)
+        is_new = await asyncio.to_thread(sheets_client.add_application, application)
         
         # Send notification ONLY if it's a new application
         if is_new:
@@ -67,7 +67,7 @@ def log_new_application(
                 f"⭐ Fit: {fit_score}%\n"
                 f"🔗 [View Job]({job_url})"
             )
-            notifier.send_notification(msg)
+            await notifier.send_notification(msg)
             return {
                 "success": True,
                 "message": f"Logged application for {role} at {company}",
@@ -88,7 +88,7 @@ def log_new_application(
 
 
 @tool
-def update_application_status(
+async def update_application_status(
     company: str,
     role: str,
     new_status: str,
@@ -114,7 +114,7 @@ def update_application_status(
             return {"success": False, "error": f"Invalid status: {new_status}"}
         
         status = ApplicationStatus(new_status.lower())
-        sheets_client.update_status(company, role, status, notes)
+        await asyncio.to_thread(sheets_client.update_application_status, company, role, status.value, notes)
         
         return {
             "success": True,
@@ -500,7 +500,7 @@ Use the tools to manage the application pipeline effectively."""
         posted_date: str = "Today",
     ) -> Dict[str, Any]:
         """Log a new application"""
-        return log_new_application.invoke({
+        return await log_new_application.ainvoke({
             "company": company,
             "role": role,
             "platform": platform,
@@ -522,7 +522,7 @@ Use the tools to manage the application pipeline effectively."""
         notes: str = "",
     ) -> bool:
         """Update application status"""
-        result = update_application_status.invoke({
+        result = await update_application_status.ainvoke({
             "company": company,
             "role": role,
             "new_status": new_status,

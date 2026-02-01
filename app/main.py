@@ -122,8 +122,7 @@ async def lifespan(app: FastAPI):
     # Notify user bot is live (in background to not block startup)
     try:
         from app.tools.notifications.telegram_notifier import notifier
-        asyncio.create_task(asyncio.to_thread(
-            notifier.send_notification, 
+        asyncio.create_task(notifier.send_notification(
             "🚀 *AI Job Agent is LIVE on Render!*\n\nHealth Check: ✅\nScheduler: ✅\nTelegram Polling: ✅"
         ))
     except Exception as e:

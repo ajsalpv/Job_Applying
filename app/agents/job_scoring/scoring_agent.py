@@ -2,6 +2,7 @@
 Job Scoring Agent - LangGraph-based scoring with tool calling
 Uses ReAct pattern for intelligent job evaluation
 """
+import json
 from typing import List, Dict, Any
 from langchain_core.tools import tool
 from app.agents.base_agent import LangGraphAgent, AgentResult

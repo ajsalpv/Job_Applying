@@ -16,6 +16,18 @@ from app.tools.utils.logger import get_logger
 
 logger = get_logger("orchestrator")
 
+# Constants for platform discovery
+PLATFORM_AGENTS = {
+    "linkedin": "linkedin_agent",
+    "indeed": "indeed_agent",
+    "naukri": "naukri_agent",
+    "glassdoor": "glassdoor_agent",
+    "instahyre": "instahyre_agent",
+    "cutshort": "cutshort_agent",
+    "wellfound": "wellfound_agent",
+    "hirist": "hirist_agent",
+}
+
 def get_platform_agent(name: str):
     """Lazy load discovery agents to save RAM"""
     from app.agents.job_discovery import (
@@ -44,11 +56,20 @@ async def discover_jobs(state: WorkflowState) -> WorkflowState:
     """Node: Discover jobs from all platforms in parallel"""
     logger.info("Starting parallel job discovery with persistent deduplication")
     
-    # Parse multiple keywords and locations
-    platforms = state.get("platforms", list(PLATFORM_AGENTS.keys()))
-    raw_keywords = state.get("keywords", "AI Engineer")
+    from app.config.settings import get_settings
+    settings = get_settings()
+    
+    # Use state values if available, otherwise use defaults from settings
+    platforms = state.get("platforms") or list(PLATFORM_AGENTS.keys())
+    raw_keywords = state.get("keywords") or settings.target_roles
+    
+    # Parse multiple keywords
     keywords_list = [k.strip() for k in raw_keywords.split(",")] if "," in raw_keywords else [raw_keywords]
-    locations = state.get("locations", ["Bangalore"])
+    
+    # Get locations (state or settings)
+    locations = state.get("locations")
+    if not locations:
+        locations = [l.strip() for l in settings.user_location.split(",")]
     
     # LOAD PERSISTENT SEEN URLS
     import os, json
