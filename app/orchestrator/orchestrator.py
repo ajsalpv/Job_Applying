@@ -325,7 +325,7 @@ def route_after_review(state: WorkflowState) -> str:
 # BUILD GRAPH
 # ============================================================
 
-def create_workflow() -> StateGraph:
+def create_workflow() -> "StateGraph":
     """
     Create the LangGraph workflow.
     
