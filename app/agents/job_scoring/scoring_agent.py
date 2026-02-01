@@ -150,7 +150,8 @@ def calculate_location_match(job_location: str) -> Dict[str, Any]:
     high_priority_cities = [
         "bangalore", "bengaluru", "hyderabad", "chennai", 
         "kochi", "cochin", "calicut", "kozhikode", 
-        "trivandrum", "thiruvananthapuram", "mohali"
+        "trivandrum", "thiruvananthapuram", "mohali",
+        "delhi", "gurgaon", "noida", "goa"
     ]
     
     if "remote" in loc_lower or "wfh" in loc_lower or "home" in loc_lower:

@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     user_name: str = Field(default="Ajsal PV", env="USER_NAME")
     user_email: str = Field(default="pvajsal27@gmail.com", env="USER_EMAIL")
     user_phone: str = Field(default="+91 7356793165", env="USER_PHONE")
-    user_location: str = Field(default="Bangalore, Bengaluru, Chennai, Hyderabad, Mumbai, Kochi, Thiruvananthapuram, Kerala", env="USER_LOCATION")
+    user_location: str = Field(default="Bangalore, Bengaluru, Chennai, Hyderabad, Mumbai, Kochi, Thiruvananthapuram, Kerala, Delhi, Goa, Mohali", env="USER_LOCATION")
     target_roles: str = Field(
         default="AI Engineer,ML Engineer,Machine Learning Engineer",
         env="TARGET_ROLE"
