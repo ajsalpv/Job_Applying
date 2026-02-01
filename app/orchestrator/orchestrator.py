@@ -328,16 +328,8 @@ def route_after_review(state: WorkflowState) -> str:
 def create_workflow() -> "StateGraph":
     """
     Create the LangGraph workflow.
-    
-    Flow:
-    1. Discover jobs → 
-    2. Score/filter →
-    3. [PAUSE: Human review] →
-    4. Generate resume →
-    5. Generate cover letters →
-    6. Prepare applications →
-    7. Track
     """
+    from langgraph.graph import StateGraph, END
     workflow = StateGraph(WorkflowState)
     
     # Add nodes
@@ -356,7 +348,6 @@ def create_workflow() -> "StateGraph":
     workflow.add_edge("resume", "cover_letter")
     workflow.add_edge("cover_letter", "prepare")
     workflow.add_edge("prepare", "track")
-    from langgraph.graph import END
     workflow.add_edge("track", END)
 
     return workflow
