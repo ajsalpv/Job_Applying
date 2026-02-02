@@ -1,6 +1,7 @@
 """
 Google Sheets Client - gspread wrapper for job tracking
 """
+import json
 from typing import List, Optional, Dict, Any
 import gspread
 from google.oauth2.service_account import Credentials
@@ -29,10 +30,26 @@ class SheetsClient:
     def _get_client(self) -> gspread.Client:
         """Get or create gspread client"""
         if self._client is None:
-            creds = Credentials.from_service_account_file(
-                self.settings.google_sheets_credentials_path,
-                scopes=SCOPES,
-            )
+            # Try to load from environment variable first (Cloud-friendly)
+            if self.settings.google_sheets_credentials_json:
+                try:
+                    creds_dict = json.loads(self.settings.google_sheets_credentials_json)
+                    creds = Credentials.from_service_account_info(
+                        creds_dict,
+                        scopes=SCOPES,
+                    )
+                    logger.info("Loaded Google Sheets credentials from environment variable")
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse credentials JSON from env: {e}")
+                    raise
+            else:
+                # Fallback to file path (Local development)
+                creds = Credentials.from_service_account_file(
+                    self.settings.google_sheets_credentials_path,
+                    scopes=SCOPES,
+                )
+                logger.info(f"Loaded Google Sheets credentials from file: {self.settings.google_sheets_credentials_path}")
+                
             self._client = gspread.authorize(creds)
             logger.info("Google Sheets client initialized")
         return self._client

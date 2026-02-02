@@ -36,28 +36,38 @@ async def log_new_application(
 ) -> Dict[str, Any]:
     """
     Log a new job application to tracking sheet and notify user.
+    ALWAYS sends Telegram notification, Sheets logging is best-effort.
     """
+    logger = get_logger("tracking")
+    
+    # Build application object
+    application = JobApplication(
+        date=datetime.now().strftime("%Y-%m-%d"),
+        platform=platform,
+        company=company,
+        role=role,
+        location=location,
+        experience_required=experience_required,
+        fit_score=fit_score,
+        status=ApplicationStatus.DISCOVERED,
+        job_url=job_url,
+        job_description=job_description[:500] if job_description else "",
+        interview_prep=interview_prep,
+        skills_to_learn=skills_to_learn,
+        notes=f"Posted: {posted_date}",
+    )
+    
+    # Try to log to Google Sheets (best-effort, don't block notifications)
+    sheets_success = False
     try:
-        application = JobApplication(
-            date=datetime.now().strftime("%Y-%m-%d"),
-            platform=platform,
-            company=company,
-            role=role,
-            location=location,
-            experience_required=experience_required,
-            fit_score=fit_score,
-            status=ApplicationStatus.DISCOVERED,
-            job_url=job_url,
-            job_description=job_description[:500] if job_description else "",
-            interview_prep=interview_prep,
-            skills_to_learn=skills_to_learn,
-            notes=f"Posted: {posted_date}",
-        )
-        
-        is_new = await asyncio.to_thread(sheets_client.add_application, application)
-        
-        # Send notification ONLY if it's a new application
-        if is_new:
+        sheets_success = await asyncio.to_thread(sheets_client.add_application, application)
+    except Exception as e:
+        logger.warning(f"Sheets logging failed (continuing with notification): {e}")
+        sheets_success = True  # Assume new if sheets unavailable
+    
+    # ALWAYS send Telegram notification for new jobs
+    if sheets_success:
+        try:
             msg = (
                 f"🎯 *New Job Found!*\n"
                 f"🏢 *{company}*\n"
@@ -69,22 +79,20 @@ async def log_new_application(
                 f"🔗 [View Job]({job_url})"
             )
             await notifier.send_notification(msg)
-            return {
-                "success": True,
-                "message": f"Logged application for {role} at {company}",
-                "row": 0
-            }
-        else:
-             return {
-                "success": True, 
-                "message": f"Skipped duplicate: {role} at {company}",
-                "row": 0
-             }
+            logger.info(f"✅ Telegram notification sent for: {role} at {company}")
+        except Exception as e:
+            logger.error(f"Failed to send Telegram notification: {e}")
         
-    except Exception as e:
         return {
-            "success": False,
-            "error": str(e),
+            "success": True,
+            "message": f"Logged application for {role} at {company}",
+            "row": 0
+        }
+    else:
+        return {
+            "success": True, 
+            "message": f"Skipped duplicate: {role} at {company}",
+            "row": 0
         }
 
 

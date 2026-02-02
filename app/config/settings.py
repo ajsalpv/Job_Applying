@@ -22,6 +22,10 @@ class Settings(BaseSettings):
         default="credentials.json",
         env="GOOGLE_SHEETS_CREDENTIALS_PATH"
     )
+    google_sheets_credentials_json: Optional[str] = Field(
+        default=None,
+        env="GOOGLE_SHEETS_CREDENTIALS_JSON"
+    )
     google_sheet_id: Optional[str] = Field(default=None, env="GOOGLE_SHEET_ID")
     
     # Browser Settings
