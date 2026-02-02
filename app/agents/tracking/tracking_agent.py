@@ -2,6 +2,7 @@
 Intelligent Tracking Agent - LangGraph-based application tracking
 Manages job applications with comprehensive tools
 """
+import asyncio
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from langchain_core.tools import tool
