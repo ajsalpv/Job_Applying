@@ -14,8 +14,8 @@ class Settings(BaseSettings):
     groq_api_key: str = Field(default="", env="GROQ_API_KEY")
     
     # Model Selection
-    fast_model: str = "llama3-8b-8192"  # For quick tasks (scoring, extraction)
-    smart_model: str = "llama-3.1-70b-versatile"  # For writing (resume, cover letter)
+    fast_model: str = "llama-3.3-70b-versatile"  # For quick tasks (scoring, extraction)
+    smart_model: str = "llama-3.3-70b-versatile"  # For writing (resume, cover letter)
     
     # Google Sheets
     google_sheets_credentials_path: str = Field(
