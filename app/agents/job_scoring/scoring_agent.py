@@ -275,12 +275,34 @@ class ScoringAgentLangGraph(LangGraphAgent):
                 {"role": "user", "content": enrich_user}
             ])
             
-            # Parse response
-            content = response.content
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0].strip()
+            # Parse response with robust fallback
+            content = response.content.strip() if response.content else ""
             
-            enrichment = json.loads(content)
+            # Skip empty responses
+            if not content:
+                raise ValueError("Empty LLM response")
+            
+            # Try multiple parsing strategies
+            enrichment = None
+            
+            # Strategy 1: Extract from code block
+            if "```json" in content:
+                json_str = content.split("```json")[1].split("```")[0].strip()
+                enrichment = json.loads(json_str)
+            elif "```" in content:
+                json_str = content.split("```")[1].split("```")[0].strip()
+                enrichment = json.loads(json_str)
+            else:
+                # Strategy 2: Find JSON object in text
+                start_idx = content.find("{")
+                end_idx = content.rfind("}") + 1
+                if start_idx != -1 and end_idx > start_idx:
+                    json_str = content[start_idx:end_idx]
+                    enrichment = json.loads(json_str)
+                else:
+                    # Strategy 3: Try parsing entire content
+                    enrichment = json.loads(content)
+            
             return {
                 **job,
                 "interview_prep": enrichment.get("interview_prep", ""),

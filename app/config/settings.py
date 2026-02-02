@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     # LLM Configuration
     groq_api_key: str = Field(default="", env="GROQ_API_KEY")
     
-    # Model Selection
-    fast_model: str = "llama-3.3-70b-versatile"  # For quick tasks (scoring, extraction)
+    # Model Selection (llama-3.1-8b-instant is ~10x more token-efficient)
+    fast_model: str = "llama-3.1-8b-instant"  # For quick tasks (scoring, extraction)
     smart_model: str = "llama-3.3-70b-versatile"  # For writing (resume, cover letter)
     
     # Google Sheets
