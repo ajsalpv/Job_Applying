@@ -114,7 +114,7 @@ class SheetsClient:
             return True
         except Exception as e:
             logger.error(f"Failed to add application: {e}")
-            return False
+            raise  # Re-raise to allow caller to handle fallback (e.g. notify anyway)
     
     @sheets_retry
     def get_all_applications(self) -> List[JobApplication]:
