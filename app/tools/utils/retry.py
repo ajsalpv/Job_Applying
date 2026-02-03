@@ -8,6 +8,7 @@ from tenacity import (
     retry_if_exception_type,
     before_sleep_log,
 )
+import requests
 from app.tools.utils.logger import get_logger
 
 logger = get_logger("retry")
@@ -56,4 +57,11 @@ sheets_retry = create_retry_decorator(
     min_wait=1,
     max_wait=10,
     exceptions=(Exception,),
+)
+
+telegram_retry = create_retry_decorator(
+    max_attempts=3,
+    min_wait=2,
+    max_wait=10,
+    exceptions=(IOError, requests.RequestException),
 )

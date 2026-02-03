@@ -5,6 +5,7 @@ import asyncio
 import requests
 from app.config.settings import get_settings
 from app.tools.utils.logger import get_logger
+from app.tools.utils.retry import telegram_retry
 
 logger = get_logger("telegram")
 
@@ -17,6 +18,7 @@ class TelegramNotifier:
         self.chat_id = self.settings.telegram_chat_id
         self.base_url = f"https://api.telegram.org/bot{self.token}"
         
+    @telegram_retry
     async def send_notification(self, message: str) -> bool:
         """
         Send a text message notification asynchronously
