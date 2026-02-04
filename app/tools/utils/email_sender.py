@@ -3,6 +3,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 import os
+import json
 import base64
 from app.config.settings import get_settings
 from app.tools.utils.logger import get_logger
@@ -68,14 +69,29 @@ class EmailSender:
             body_content = template_content.replace(target_phrase, position_name) if target_phrase in template_content else template_content.replace("[Position]", position_name)
             
             # --- METHOD 1: Official Gmail API (HTTP - Recommended for Render + Google Only) ---
-            token_abs_path = os.path.abspath(self.settings.gmail_token_path)
-            if os.path.exists(self.settings.gmail_token_path):
-                logger.info(f"✅ Found Gmail Token at: {token_abs_path}")
-                logger.info(f"Using Official Gmail API (HTTP) for 100% Google Security...")
-                from google.oauth2.credentials import Credentials
-                from googleapiclient.discovery import build
+            # --- METHOD 1: Official Gmail API (HTTP - Recommended for Render + Google Only) ---
+            creds = None
+            
+            # 1. Try Environment Variable (Cloud / Render Fix)
+            if self.settings.gmail_token_json:
+                try:
+                    logger.info("Using Gmail Token from environment variable")
+                    token_info = json.loads(self.settings.gmail_token_json)
+                    from google.oauth2.credentials import Credentials
+                    creds = Credentials.from_authorized_user_info(token_info)
+                except Exception as e:
+                    logger.error(f"Failed to load Gmail Token from env: {e}")
 
+            # 2. Try Local File (Fallback)
+            if not creds and os.path.exists(self.settings.gmail_token_path):
+                token_abs_path = os.path.abspath(self.settings.gmail_token_path)
+                logger.info(f"✅ Found Gmail Token at: {token_abs_path}")
+                from google.oauth2.credentials import Credentials
                 creds = Credentials.from_authorized_user_file(self.settings.gmail_token_path)
+
+            if creds:
+                logger.info(f"Using Official Gmail API (HTTP) for 100% Google Security...")
+                from googleapiclient.discovery import build
                 service = build('gmail', 'v1', credentials=creds)
                 
                 # Build Message

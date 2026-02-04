@@ -103,19 +103,24 @@ def calculate_experience_match(experience_required: str) -> Dict[str, Any]:
             # 0-2 years - PERFECT
             score = 25
             analysis = "Perfect match (0-2 years)"
-        elif min_exp <= 1 and (max_exp is None or max_exp <= 3):
-            # 0-1 or 1-2 or 1-3 years - GOOD
+        elif min_exp <= 1 and (max_exp is None or max_exp <= 2):
+            # 0-1 or 1-2 years - GOOD
             score = 25
             analysis = "Good match for 1 year experience"
-        elif min_exp == 2 and (max_exp is None or max_exp <= 4):
-            # 2-4 years - STRETCH but acceptable
-            score = 15
-            analysis = "Stretch role (2+ years preferred)"
-        else:
-            # Anything else with high experience
+        elif max_exp and max_exp > 3:
+             # Wide ranges like 1-5 years (Usually Senior)
+             score = 10
+             analysis = f"Experience range too wide ({min_exp}-{max_exp})"
+        elif min_exp >= 2:
+             # 2+ years is often too senior for 1 year user
             score = 0
-            analysis = f"Experience requirement too high ({experience_required})"
+            analysis = f"Requires {min_exp}+ years (Too Senior)"
             is_excluded = True
+        else:
+            # Catch-all
+            score = 15
+            analysis = f"Experience requirement acceptable ({experience_required})"
+            
     elif is_fresher_role or is_junior:
         score = 25
         analysis = "Entry-level/fresher role"

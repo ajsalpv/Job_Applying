@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     # Email API (Recommended for Cloud)
     gmail_credentials_path: str = Field(default="gmail_credentials.json", env="GMAIL_CREDENTIALS_PATH")
     gmail_token_path: str = Field(default="token.json", env="GMAIL_TOKEN_PATH")
+    gmail_token_json: Optional[str] = Field(default=None, env="GMAIL_TOKEN_JSON")
     
     class Config:
         env_file = ".env"

@@ -2,6 +2,8 @@
 .env
 .env.example
 credentials.json
+gmail_credentials.json
+token.json
 sig.txt
 
 # Python

@@ -29,10 +29,20 @@ def main():
             token.write(creds.to_json())
     
     print("\n✅ SUCCESS! 'token.json' has been generated.")
-    print("Now follow these steps:")
-    print("1. Commit and push 'token.json' to your GitHub.")
-    print("2. Ensure Render redeploys.")
-    print("3. Your bot will now use the Official Gmail API over HTTPS (Port 443)!")
+    
+    # Read and print the token for Render Env Var
+    with open('token.json', 'r') as token:
+        token_content = token.read()
+        
+    print("\n📋 FOR RENDER DEPLOYMENT (COPY THIS):")
+    print("==================================================")
+    print(token_content)
+    print("==================================================")
+    print("1. Go to Render Dashboard -> Environment Variables")
+    print("2. Add Key: GMAIL_TOKEN_JSON")
+    print("3. Paste the content above as the Value")
+    
+    print("\nAlso commit 'token.json' to GitHub if you want local file fallback.")
 
 if __name__ == '__main__':
     main()
