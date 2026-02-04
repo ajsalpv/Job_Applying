@@ -73,22 +73,17 @@ class PlaywrightManager:
                 timezone_id="Asia/Kolkata",
             )
             
-            # RESOURCE BLOCKING: Skip images, fonts, media to save 50%+ RAM
-            async def block_aggressively(route):
-                if route.request.resource_type in ["image", "media", "font", "stylesheet"]:
-                    # We might need some stylesheets for basic layout, but blocking them is safest for RAM
-                    # For now keep stylesheets but block the big ones
-                    await route.abort()
-                else:
-                    await route.continue_()
-            
-            # Simple version: block images, media, fonts
+            # RESOURCE BLOCKING: Skip images, fonts, media to save RAM
+            # We now allow stylesheets as some sites use them for critical layout/selector logic
             await self._context.route("**/*", 
                 lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
 
-            # Add stealth scripts
+            # Add stealth scripts and more human-like headers
             await self._context.add_init_script("""
                 Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                window.chrome = { runtime: {} };
+                Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
             """)
             
         return self._context

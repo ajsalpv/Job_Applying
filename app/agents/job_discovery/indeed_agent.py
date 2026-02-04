@@ -38,7 +38,7 @@ class IndeedAgent(IntelligentJobDiscoveryAgent):
                     f"https://in.indeed.com/jobs?"
                     f"q={keywords.replace(' ', '+')}"
                     f"&l={location.replace(' ', '+')}"
-                    f"&fromage=1"  # Last 24 hours
+                    f"&fromage=3"  # Last 3 days instead of 1
                 )
                 
                 await playwright_manager.navigate(page, search_url, wait_for="load")
@@ -47,25 +47,30 @@ class IndeedAgent(IntelligentJobDiscoveryAgent):
                 raw_jobs = await page.evaluate("""
                     () => {
                         const jobs = [];
-                        const cards = document.querySelectorAll('.job_seen_beacon, .jobCard, .result, [data-jk]');
+                        // Indeed constantly changes selectors - using multiple common ones
+                        const cards = document.querySelectorAll('.job_seen_beacon, .jobCard, .result, [data-jk], [data-testid="slider_item"], .tapItem');
                         
                         cards.forEach((card, idx) => {
-                            if (idx < 40) {
-                                const titleEl = card.querySelector('h2.jobTitle, .jobTitle, [id^="jobtitle"]');
-                                const companyEl = card.querySelector('.companyName, [data-testid="company-name"], .company_location span[data-testid="company-name"]');
-                                const locationEl = card.querySelector('.location, [data-testid="text-location"], .company_location [data-testid="text-location"]');
-                                const expEl = card.querySelector('.attribute_snippet, [data-testid="attribute_snippet"], .metadata.salary-snippet-container');
-                                const linkEl = card.querySelector('a[href*="/viewjob"], a.jcs-JobTitle, a[id^="job_"]');
-                                const descEl = card.querySelector('.job-snippet, .job_snippet, [data-testid="job-snippet"]');
-                                const dateEl = card.querySelector('.date, .myj-date, [data-testid="myJobsStateDate"]');
+                            if (idx < 50) {
+                                // Try multiple selector patterns for each field
+                                const titleEl = card.querySelector('h2.jobTitle, .jobTitle, [id^="jobtitle"], a.jcs-JobTitle, [data-testid="job-title"]');
+                                const companyEl = card.querySelector('.companyName, [data-testid="company-name"], .company_location span[data-testid="company-name"], .companyName span');
+                                const locationEl = card.querySelector('.location, [data-testid="text-location"], .companyLocation, .company_location [data-testid="text-location"]');
+                                const expEl = card.querySelector('.attribute_snippet, [data-testid="attribute_snippet"], .metadata.salary-snippet-container, .jobMetaDataGroup');
+                                const linkEl = card.querySelector('a[href*="/viewjob"], a.jcs-JobTitle, a[id^="job_"], a[data-testid="job-title"]');
+                                const descEl = card.querySelector('.job-snippet, .job_snippet, [data-testid="job-snippet"], .summary');
+                                const dateEl = card.querySelector('.date, .myj-date, [data-testid="myJobsStateDate"], .dateText');
                                 
                                 if (titleEl) {
+                                    const jobUrl = linkEl?.href || '';
+                                    const absoluteUrl = jobUrl.startsWith('http') ? jobUrl : 'https://in.indeed.com' + jobUrl;
+                                    
                                     jobs.push({
                                         role: titleEl.textContent?.trim() || '',
                                         company: companyEl?.textContent?.trim() || '',
                                         location: locationEl?.textContent?.trim() || '',
                                         experience_required: expEl?.textContent?.trim() || '',
-                                        job_url: linkEl?.href ? (linkEl.href.startsWith('http') ? linkEl.href : 'https://in.indeed.com' + linkEl.getAttribute('href')) : '',
+                                        job_url: absoluteUrl,
                                         job_description: descEl?.textContent?.trim() || '',
                                         posted_date: dateEl?.textContent?.trim() || 'Today',
                                         platform: 'indeed',
@@ -77,6 +82,12 @@ class IndeedAgent(IntelligentJobDiscoveryAgent):
                         return jobs;
                     }
                 """)
+                
+                if not raw_jobs:
+                    title = await page.title()
+                    self.logger.warning(f"Indeed: 0 raw jobs found. Page title: '{title}'")
+                    if any(kw in title.lower() for kw in ["hcaptcha", "verify", "human", "blocked", "just a moment"]):
+                        self.logger.error("Indeed: Bot detection/Captcha detected!")
                 
                 self.logger.info(f"Indeed found {len(raw_jobs)} raw jobs")
                 

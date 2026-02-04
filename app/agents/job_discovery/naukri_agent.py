@@ -42,7 +42,7 @@ class NaukriAgent(IntelligentJobDiscoveryAgent):
                 # footer_freshness=7 (Last 7 days)
                 search_url = (
                     f"https://www.naukri.com/{keyword_slug}-jobs-in-{location_slug}"
-                    f"?experience=0&experience=1&experience=2&footer_freshness=1"
+                    f"?experience=0&experience=1&experience=2&footer_freshness=7" # Last 7 days
                 )
                 
                 await playwright_manager.navigate(page, search_url)
@@ -51,17 +51,19 @@ class NaukriAgent(IntelligentJobDiscoveryAgent):
                 raw_jobs = await page.evaluate("""
                     () => {
                         const jobs = [];
-                        const cards = document.querySelectorAll('.jobTuple, .cust-job-tuple, article.jobTuple');
+                        // Naukri updated layout: .srp-job-tuple, .cust-job-tuple, etc.
+                        const cards = document.querySelectorAll('.jobTuple, .cust-job-tuple, article.jobTuple, .srp-job-tuple, [class*="job-tuple"]');
                         
                         cards.forEach((card, idx) => {
-                            if (idx < 30) {
-                                const titleEl = card.querySelector('.title, .jobTitle, a.title');
-                                const companyEl = card.querySelector('.companyInfo a, .comp-name, .m-vn .name');
-                                const locationEl = card.querySelector('.location, .locWdth, .loc span');
-                                const expEl = card.querySelector('.experience, .expwdth, .exp span');
-                                const linkEl = card.querySelector('a.title, a[href*="job-listings"]');
-                                const descEl = card.querySelector('.job-description, .ellipsis, .job-snippet');
-                                const dateEl = card.querySelector('.posted-by, .jobPostDate, .postedDate');
+                            if (idx < 50) {
+                                // Modern Naukri selectors often use data-testid or specific classes
+                                const titleEl = card.querySelector('.title, .jobTitle, a.title, [class*="title"]');
+                                const companyEl = card.querySelector('.companyInfo a, .comp-name, .name, [class*="company"]');
+                                const locationEl = card.querySelector('.location, .locWdth, .loc span, [class*="location"]');
+                                const expEl = card.querySelector('.experience, .expwdth, .exp span, [class*="experience"]');
+                                const linkEl = card.querySelector('a.title, a[href*="job-listings"], a[class*="title"]');
+                                const descEl = card.querySelector('.job-description, .ellipsis, .job-snippet, .job-desc');
+                                const dateEl = card.querySelector('.posted-by, .jobPostDate, .postedDate, .footer');
                                 
                                 if (titleEl) {
                                     jobs.push({
@@ -81,6 +83,12 @@ class NaukriAgent(IntelligentJobDiscoveryAgent):
                         return jobs;
                     }
                 """)
+                
+                if not raw_jobs:
+                    title = await page.title()
+                    self.logger.warning(f"Naukri: 0 raw jobs found. Page title: '{title}'")
+                    if any(kw in title.lower() for kw in ["blocked", "captcha", "security", "verify"]):
+                        self.logger.error("Naukri: Bot detection/Security challenge detected!")
                 
                 self.logger.info(f"Naukri found {len(raw_jobs)} raw jobs")
                 
