@@ -280,40 +280,50 @@ class ScoringAgentLangGraph(LangGraphAgent):
                 {"role": "user", "content": enrich_user}
             ])
             
-            # Parse response with robust fallback
+            # Parse response with robust professional fallback
             content = response.content.strip() if response.content else ""
             
-            # Skip empty responses
             if not content:
                 raise ValueError("Empty LLM response")
             
-            # Try multiple parsing strategies
-            enrichment = None
-            
-            # Strategy 1: Extract from code block
-            if "```json" in content:
-                json_str = content.split("```json")[1].split("```")[0].strip()
-                enrichment = json.loads(json_str)
-            elif "```" in content:
-                json_str = content.split("```")[1].split("```")[0].strip()
-                enrichment = json.loads(json_str)
-            else:
-                # Strategy 2: Find JSON object in text
-                start_idx = content.find("{")
-                end_idx = content.rfind("}") + 1
-                if start_idx != -1 and end_idx > start_idx:
-                    json_str = content[start_idx:end_idx]
+            # Use regex to find the JSON block - more robust than simple splitting
+            import re
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+                
+                # SANITIZATION: Fix common LLM JSON errors
+                # 1. Replace literal newlines/tabs inside strings with escapes
+                # This is tricky without a proper parser, but we can do common ones
+                json_str = json_str.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
+                
+                # 2. But we accidentally escaped the actual JSON structure newlines! 
+                # Let's fix that - structure newlines are usually around { } [ ] , :
+                # Actually, json.loads handles newlines fine IF they aren't inside the string value.
+                # A safer way to sanitize:
+                def sanitize_json_str(match):
+                    s = match.group(0)
+                    # Replace actual newlines with escaped ones inside the string
+                    return s.replace('\n', '\\n').replace('\t', '\\t')
+                
+                # Find all strings and sanitize them
+                json_str = re.sub(r'":\s*"([^"]*)"', sanitize_json_str, json_match.group(0))
+                
+                try:
                     enrichment = json.loads(json_str)
-                else:
-                    # Strategy 3: Try parsing entire content
-                    enrichment = json.loads(content)
+                except json.JSONDecodeError:
+                    # Final fallback: just try to load the raw match if sanitization failed
+                    enrichment = json.loads(json_match.group(0))
+            else:
+                # No JSON braces found, attempt to parse the whole string
+                enrichment = json.loads(content)
             
             return {
                 **job,
-                "interview_prep": enrichment.get("interview_prep", ""),
-                "skills_to_learn": enrichment.get("skills_to_learn", ""),
-                "notes": enrichment.get("notes", ""),
-                "job_summary": enrichment.get("job_summary", ""),
+                "interview_prep": enrichment.get("interview_prep", "Prepare for AI technical rounds."),
+                "skills_to_learn": enrichment.get("skills_to_learn", "AI/ML fundamentals."),
+                "notes": enrichment.get("notes", "Quick application."),
+                "job_summary": enrichment.get("job_summary", job.get("role", "")),
             }
         except Exception as e:
             self.logger.error(f"Enrichment error: {e}")

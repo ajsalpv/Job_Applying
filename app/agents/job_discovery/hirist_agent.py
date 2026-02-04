@@ -35,15 +35,24 @@ class HiristAgent(IntelligentJobDiscoveryAgent):
                 # Hirist search URL
                 search_url = f"https://www.hirist.tech/search/jobs?q={keywords.replace(' ', '+')}&l={location.replace(' ', '+')}"
                 
-                await playwright_manager.navigate(page, search_url, wait_for="load")
-                
-                # Hirist uses Material UI / modern JS
+                # Use domcontentloaded then wait
                 try:
-                    await page.wait_for_selector("[data-testid='job_title'], a[href*='/j/'], .job-card", timeout=15000)
-                except:
-                    self.logger.warning(f"Hirist timeout waiting for selectors. Attempting extraction anyway.")
+                    await playwright_manager.navigate(page, search_url, wait_for="domcontentloaded")
+                except Exception as e:
+                    self.logger.warning(f"Hirist initial navigation failed: {e}. Retrying once...")
+                    await page.reload(wait_until="domcontentloaded")
                 
-                await page.evaluate("window.scrollBy(0, 500)")
+                await page.wait_for_timeout(6000)
+                
+                # Check for empty title or obvious blocks
+                title = await page.title()
+                if not title or title.strip() == "":
+                    self.logger.warning("Hirist: Empty title detected, attempting reload...")
+                    await page.reload(wait_until="domcontentloaded")
+                    await page.wait_for_timeout(6000)
+                
+                # Scroll to ensure dynamic content loads
+                await page.evaluate("window.scrollBy(0, 1000)")
                 await page.wait_for_timeout(3000)
                 
                 raw_jobs = await page.evaluate("""

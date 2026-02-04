@@ -35,12 +35,26 @@ class WellfoundAgent(IntelligentJobDiscoveryAgent):
                 # Use query-based URL which is often more stable
                 search_url = f"https://wellfound.com/jobs?q={keywords.replace(' ', '+')}"
                 
-                await playwright_manager.navigate(page, search_url, wait_for="load")
+                # Navigate and wait for content
+                try:
+                    await playwright_manager.navigate(page, search_url, wait_for="domcontentloaded")
+                except Exception as e:
+                    self.logger.warning(f"Wellfound initial navigation failed: {e}. Retrying once...")
+                    await page.reload(wait_until="domcontentloaded")
+                
+                await page.wait_for_timeout(8000) # Wellfound uses heavy JS
+                
+                # Check for empty title or obvious blocks
+                title = await page.title()
+                if not title or title.strip() == "":
+                    self.logger.warning("Wellfound: Empty title detected, attempting reload...")
+                    await page.reload(wait_until="domcontentloaded")
+                    await page.wait_for_timeout(6000)
                 
                 try:
-                    await page.wait_for_selector("[data-test='StartupResult'], [class*='styles_component'], .styles_result__", timeout=15000)
+                    await page.wait_for_selector("[data-test='StartupResult'], [class*='styles_component'], .styles_result__, [class*='styles_jobListing']", timeout=15000)
                 except:
-                    self.logger.warning("Wellfound timeout waiting for job listings.")
+                    self.logger.warning("Wellfound timeout waiting for job listings. Continuing anyway.")
                 
                 await page.evaluate("window.scrollBy(0, 500)")
                 await page.wait_for_timeout(2000)

@@ -35,12 +35,26 @@ class GlassdoorAgent(IntelligentJobDiscoveryAgent):
                 # Use a more generic search URL that accepts parameters
                 search_url = f"https://www.glassdoor.co.in/Job/jobs.htm?sc.keyword={keywords.replace(' ', '+')}&locT=C&locId=115&fromAge=1"
                 
-                await playwright_manager.navigate(page, search_url, wait_for="load")
+                # Navigate and wait for content
+                try:
+                    await playwright_manager.navigate(page, search_url, wait_for="domcontentloaded")
+                except Exception as e:
+                    self.logger.warning(f"Glassdoor initial navigation failed: {e}. Retrying once...")
+                    await page.reload(wait_until="domcontentloaded")
+                
+                await page.wait_for_timeout(8000) # Glassdoor is slow
+                
+                # Check for empty title or obvious blocks
+                title = await page.title()
+                if not title or title.strip() == "":
+                    self.logger.warning("Glassdoor: Empty title detected, attempting reload...")
+                    await page.reload(wait_until="domcontentloaded")
+                    await page.wait_for_timeout(6000)
                 
                 try:
-                    await page.wait_for_selector("[data-test='jobListing'], .JobCard, .JobsList_jobListItem__", timeout=15000)
+                    await page.wait_for_selector("[data-test='jobListing'], .JobCard, .JobsList_jobListItem__, [class*='jobListItem']", timeout=15000)
                 except:
-                    self.logger.warning("Glassdoor timeout waiting for job listings.")
+                    self.logger.warning("Glassdoor timeout waiting for job listings. Continuing anyway.")
                 
                 # Scroll to load more
                 await page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")

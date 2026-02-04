@@ -45,8 +45,16 @@ class NaukriAgent(IntelligentJobDiscoveryAgent):
                     f"?experience=0&experience=1&experience=2&footer_freshness=7" # Last 7 days
                 )
                 
-                await playwright_manager.navigate(page, search_url)
-                await page.wait_for_timeout(4000)
+                # Use domcontentloaded for faster initial state, then wait specifically
+                await playwright_manager.navigate(page, search_url, wait_for="domcontentloaded")
+                await page.wait_for_timeout(6000)
+                
+                # FALLBACK: If title is empty, it might be a block or slow load
+                title = await page.title()
+                if not title or title.strip() == "":
+                    self.logger.warning("Naukri: Empty title detected, attempting one reload...")
+                    await page.reload(wait_until="domcontentloaded")
+                    await page.wait_for_timeout(6000)
                 
                 raw_jobs = await page.evaluate("""
                     () => {
