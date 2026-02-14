@@ -104,6 +104,23 @@ class IndeedAgent(IntelligentJobDiscoveryAgent):
                 
                 self.logger.info(f"Indeed found {len(raw_jobs)} raw jobs")
                 
+                # SMART FALLBACK: If 0 jobs found, use LLM to analyze DOM
+                if not raw_jobs:
+                    self.logger.warning("Indeed: 0 jobs found with selectors. Triggering Smart Discovery...")
+                    try:
+                        from app.agents.job_discovery.smart_discovery import smart_discovery
+                        page_content = await page.content()
+                        # Indeed has LOTS of junk, maybe clean it first?
+                        smart_jobs = await smart_discovery.analyze_page(page_content, search_url)
+                        if smart_jobs:
+                            self.logger.info(f"✨ Smart Discovery salvaged {len(smart_jobs)} jobs!")
+                            raw_jobs = smart_jobs
+                            for job in raw_jobs:
+                                job['platform'] = 'indeed'
+                                job['posted_date'] = 'Today' 
+                    except Exception as e:
+                        self.logger.error(f"Smart Discovery failed: {e}")
+                
                 # Standardized intelligent filtering
                 for job in raw_jobs:
                     role_lower = job.get("role", "").lower()
