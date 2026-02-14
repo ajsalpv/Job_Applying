@@ -435,6 +435,65 @@ Use your tools to analyze forms and generate suggestions."""
         )
 
 
+    async def fill_application_form(
+        self,
+        job_url: str,
+        fields_map: Dict[str, str],
+        submit: bool = False, # SAFETY: Default to Dry Run
+    ) -> Dict[str, Any]:
+        """
+        Auto-fill application form with user data.
+        
+        Args:
+            job_url: Job URL
+            fields_map: Map of field names to values
+            submit: Whether to click submit (DANGEROUS)
+            
+        Returns:
+            Status of the operation
+        """
+        self.logger.info(f"Auto-filling application (Submit={submit}): {job_url}")
+        
+        try:
+            async with playwright_manager.get_page() as page:
+                await playwright_manager.navigate(page, job_url)
+                
+                # Fill mapped fields with human simulation
+                for name, value in fields_map.items():
+                    try:
+                        # Try exact name match first
+                        selector = f"[name='{name}']"
+                        if await page.query_selector(selector):
+                            await playwright_manager.fill(page, selector, value)
+                            continue
+                            
+                        # Try label match (Smart fallback)
+                        # This is where we'd use SmartDiscovery in future
+                    except Exception as e:
+                        self.logger.warning(f"Failed to fill field {name}: {e}")
+                
+                # Take proof screenshot
+                screenshot_path = f"logs/filled_{hash(job_url)}.png"
+                await playwright_manager.screenshot(page, screenshot_path)
+                
+                if submit:
+                    self.logger.warning(f"⚠️ ATTEMPTING SUBMISSION FOR {job_url}")
+                    # Strict click logic for submit buttons
+                    submit_btn = await page.query_selector("button[type='submit'], input[type='submit']")
+                    if submit_btn:
+                        await playwright_manager.click(page, "button[type='submit']")
+                        await page.wait_for_timeout(5000)
+                        return {"status": "submitted", "proof": screenshot_path}
+                    else:
+                        return {"status": "failed", "error": "Submit button not found"}
+                else:
+                    self.logger.info("ℹ️ Dry Run: Skipping submission click")
+                    return {"status": "filled_dry_run", "proof": screenshot_path}
+                    
+        except Exception as e:
+            self.logger.error(f"Auto-fill failed: {e}")
+            return {"status": "error", "error": str(e)}
+
 # Export singleton and class
 application_agent = ApplicationAgentLangGraph()
 ApplicationAgent = ApplicationAgentLangGraph

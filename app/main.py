@@ -119,22 +119,33 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 Starting Telegram Listener...")
     asyncio.create_task(telegram_service.start_polling())
     
-    # Keep-Alive Ping to prevent Render Free Tier spin-down
-    async def keep_alive_ping():
-        import httpx
+    # Keep-Alive Ping (Threaded to avoid event loop blocking)
+    import threading
+    import time
+    import requests
+    import gc
+
+    def run_keep_alive():
+        """Background thread to ping server"""
         render_url = os.environ.get("RENDER_EXTERNAL_URL", "http://localhost:8000")
         ping_url = f"{render_url}/api/health"
+        logger.info(f"🔄 Keep-alive thread started. Target: {ping_url}")
+        
         while True:
-            await asyncio.sleep(600)  # 10 minutes
+            time.sleep(600)  # 10 minutes
             try:
-                async with httpx.AsyncClient() as client:
-                    await client.get(ping_url, timeout=10)
-                    logger.info("✅ Keep-alive ping sent to self")
+                response = requests.get(ping_url, timeout=10)
+                logger.info(f"✅ Keep-alive ping status: {response.status_code}")
+                
+                # OPTIONAL: Force GC after ping to keep memory low
+                gc.collect()
+                
             except Exception as e:
                 logger.warning(f"Keep-alive ping failed: {e}")
-    
-    asyncio.create_task(keep_alive_ping())
-    logger.info("🏓 Keep-alive pinger started (10 min interval)")
+
+    # Start thread
+    ping_thread = threading.Thread(target=run_keep_alive, daemon=True)
+    ping_thread.start()
     
     # Notify user bot is live (in background to not block startup)
     try:

@@ -3,6 +3,8 @@ Playwright Manager - Async browser automation with stealth settings
 """
 import sys
 import asyncio
+import random
+import json
 
 # Enforce ProactorEventLoop on Windows for Playwright
 if sys.platform == "win32":
@@ -100,17 +102,35 @@ class PlaywrightManager:
         finally:
             await page.close()
     
-    async def navigate(self, page: Page, url: str, wait_for: str = "networkidle"):
-        """Navigate to URL with waiting strategy"""
+    async def navigate(self, page: Page, url: str, wait_for: str = "domcontentloaded"):
+        """Navigate to URL with human-like characteristics"""
         logger.debug(f"Navigating to: {url}")
         try:
+            # randomized delay before action
+            await asyncio.sleep(random.uniform(1.5, 4.0))
+            
             await page.goto(url, wait_until=wait_for, timeout=self.settings.browser_timeout)
-            # Add random delay to appear human
-            await asyncio.sleep(1 + (hash(url) % 3))
+            
+            # Post-navigation random behaviors
+            await self._human_scroll(page)
+            
         except Exception as e:
             logger.error(f"Navigation failed: {e}")
             raise
-    
+
+    async def _human_scroll(self, page: Page):
+        """Simulate human reading/scrolling"""
+        try:
+            # Scroll down a bit
+            await page.mouse.wheel(0, random.randint(300, 700))
+            await asyncio.sleep(random.uniform(0.5, 1.5))
+            # Maybe scroll up a tiny bit
+            if random.random() < 0.3:
+                await page.mouse.wheel(0, -random.randint(50, 200))
+            await asyncio.sleep(random.uniform(0.5, 2.0))
+        except:
+            pass
+
     async def get_page_content(self, page: Page) -> str:
         """Get page HTML content"""
         return await page.content()
@@ -140,20 +160,54 @@ class PlaywrightManager:
             return []
     
     async def click(self, page: Page, selector: str):
-        """Click element with human-like delay"""
-        await page.click(selector)
-        await asyncio.sleep(0.5)
-    
+        """Click element with human-like mouse movement"""
+        try:
+            element = await page.query_selector(selector)
+            if element:
+                box = await element.bounding_box()
+                if box:
+                    # Move mouse to random point within element
+                    x = box["x"] + random.uniform(5, box["width"]-5)
+                    y = box["y"] + random.uniform(5, box["height"]-5)
+                    
+                    # Simple human-like curve (steps)
+                    await page.mouse.move(x, y, steps=random.randint(5, 15))
+                    await asyncio.sleep(random.uniform(0.1, 0.4))
+                    await page.mouse.click(x, y)
+                    await asyncio.sleep(random.uniform(0.5, 1.5))
+            else:
+                # Fallback if bounding box fails
+                await page.click(selector)
+        except Exception as e:
+            logger.warning(f"Human click failed for {selector}, using standard click: {e}")
+            await page.click(selector)
+
     async def fill(self, page: Page, selector: str, value: str):
-        """Fill input field with typing simulation"""
-        await page.fill(selector, value)
-        await asyncio.sleep(0.3)
-    
-    async def screenshot(self, page: Page, path: str):
-        """Take screenshot for debugging"""
-        await page.screenshot(path=path)
-        logger.debug(f"Screenshot saved: {path}")
-    
+        """Fill input field with human typing simulation"""
+        try:
+            # Click to focus first
+            await self.click(page, selector)
+            
+            # Type character by character with variable delay
+            for char in value:
+                await page.keyboard.type(char, delay=random.uniform(30, 120)) # ms
+                
+                # Occasionally pause
+                if random.random() < 0.05:
+                    await asyncio.sleep(random.uniform(0.2, 0.8))
+            
+            await asyncio.sleep(random.uniform(0.5, 1.0))
+            
+        except Exception as e:
+            logger.warning(f"Human fill failed, using standard fill: {e}")
+            await page.fill(selector, value)
+
+    async def save_storage_state(self, path: str = "state.json"):
+        """Save cookies/storage to file"""
+        if self._context:
+            await self._context.storage_state(path=path)
+            logger.info("Session state saved")
+
     async def close(self):
         """Close browser and cleanup"""
         if self._context:
