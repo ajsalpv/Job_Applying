@@ -3,11 +3,10 @@ Logger - Loguru-based structured logging
 """
 import sys
 from loguru import logger
-from app.config.settings import get_settings
-
 
 def setup_logger():
     """Configure loguru logger with custom format"""
+    from app.config.settings import get_settings
     settings = get_settings()
     
     # Remove default handler
