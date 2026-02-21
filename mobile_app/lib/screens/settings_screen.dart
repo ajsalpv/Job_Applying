@@ -10,54 +10,86 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _urlController = TextEditingController();
+  final _locationController = TextEditingController();
+  final _rolesController = TextEditingController();
+  
+  int _experienceYears = 1;
+  bool _loading = false;
+  bool _saving = false;
   bool _connected = false;
-  bool _testing = false;
-  String? _serverInfo;
+  String _serverStatus = 'Checking connection...';
 
   @override
   void initState() {
     super.initState();
-    _loadUrl();
+    _loadSettings();
+    _checkHealth();
   }
 
-  Future<void> _loadUrl() async {
-    final url = await ApiService.getBaseUrl();
-    _urlController.text = url;
-  }
-
-  Future<void> _testConnection() async {
-    setState(() { _testing = true; });
+  Future<void> _checkHealth() async {
     try {
-      await ApiService.setBaseUrl(_urlController.text.trim());
       final health = await ApiService.getHealth();
-      setState(() {
-        _connected = true;
-        _testing = false;
-        _serverInfo = 'Status: ${health['status']} | Loop: ${health['loop']}';
+      if (mounted) {
+        setState(() {
+          _connected = true;
+          _serverStatus = 'Connected to ${health['service'] ?? 'Backend'}';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _connected = false;
+          _serverStatus = 'Cannot connect to backend';
+        });
+      }
+    }
+  }
+
+  Future<void> _loadSettings() async {
+    setState(() => _loading = true);
+    try {
+      final settings = await ApiService.getAppSettings();
+      if (mounted) {
+        setState(() {
+          _locationController.text = settings['user_location'] ?? '';
+          _rolesController.text = settings['target_roles'] ?? '';
+          _experienceYears = settings['experience_years'] ?? 1;
+        });
+      }
+    } catch (e) {
+      debugPrint('Settings load error: $e');
+      // Fallback to defaults shown in app if backend is down
+      if (mounted) {
+        _locationController.text = "Bangalore, Remote, Hyderabad"; // Minimal default
+        _rolesController.text = "AI Engineer, ML Engineer";
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _saveSettings() async {
+    setState(() => _saving = true);
+    try {
+      await ApiService.updateAppSettings({
+        'user_location': _locationController.text.trim(),
+        'target_roles': _rolesController.text.trim(),
+        'experience_years': _experienceYears,
       });
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Connected to server!'),
-            backgroundColor: AppTheme.success,
-          ),
+          const SnackBar(content: Text('✅ Preferences saved successfully!'), backgroundColor: AppTheme.success),
         );
       }
     } catch (e) {
-      setState(() {
-        _connected = false;
-        _testing = false;
-        _serverInfo = 'Error: $e';
-      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Connection failed: $e'),
-            backgroundColor: AppTheme.error,
-          ),
+          SnackBar(content: Text('❌ Save failed: $e'), backgroundColor: AppTheme.error),
         );
       }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -65,160 +97,179 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
-          children: [
-            Text('⚙️ ', style: TextStyle(fontSize: 22)),
-            Text('Settings'),
-          ],
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Server Config
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppTheme.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.surfaceLighter),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Row(
-                  children: [
-                    Icon(Icons.cloud_rounded, color: AppTheme.primary),
-                    SizedBox(width: 10),
-                    Text(
-                      'API Server',
-                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Enter your Render backend URL',
-                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _urlController,
-                  style: const TextStyle(color: AppTheme.textPrimary),
-                  decoration: InputDecoration(
-                    hintText: 'https://your-app.onrender.com',
-                    hintStyle: const TextStyle(color: AppTheme.textSecondary),
-                    filled: true,
-                    fillColor: AppTheme.surfaceLight,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    prefixIcon: const Icon(Icons.link_rounded, color: AppTheme.primary),
-                    suffixIcon: _connected
-                        ? const Icon(Icons.check_circle, color: AppTheme.success)
-                        : null,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: FilledButton.icon(
-                    onPressed: _testing ? null : _testConnection,
-                    icon: _testing
-                        ? const SizedBox(
-                            width: 18, height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.wifi_find_rounded),
-                    label: Text(_testing ? 'Testing...' : 'Test Connection'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.primary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-                if (_serverInfo != null) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: (_connected ? AppTheme.success : AppTheme.error).withAlpha(10),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: (_connected ? AppTheme.success : AppTheme.error).withAlpha(40),
-                      ),
-                    ),
-                    child: Text(
-                      _serverInfo!,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: _connected ? AppTheme.success : AppTheme.error,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // About
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppTheme.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.surfaceLighter),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Row(
-                  children: [
-                    Icon(Icons.info_outline_rounded, color: AppTheme.secondary),
-                    SizedBox(width: 10),
-                    Text(
-                      'About',
-                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                _aboutRow('App', 'AI Job Agent v1.0.0'),
-                _aboutRow('Developer', 'Ajsal PV'),
-                _aboutRow('Backend', 'FastAPI on Render'),
-                _aboutRow('AI Engine', 'Groq LLaMA 3.3'),
-                _aboutRow('Platforms', '6 (LinkedIn, Indeed, Naukri, Hirist, Glassdoor, Wellfound)'),
-              ],
-            ),
+        title: const Text('Settings'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: () { _loadSettings(); _checkHealth(); },
           ),
         ],
+      ),
+      body: _loading 
+        ? const Center(child: CircularProgressIndicator())
+        : ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              // Server Status Indicator
+              _buildCard(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 12, height: 12,
+                      decoration: BoxDecoration(
+                        color: _connected ? AppTheme.success : AppTheme.error,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Backend Status', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                          Text(_serverStatus, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      'v1.0.0',
+                      style: TextStyle(fontSize: 10, color: AppTheme.textSecondary.withAlpha(100)),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+              _buildSectionHeader('JOB SEARCH PREFERENCES'),
+              _buildCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildTextField(
+                      controller: _locationController,
+                      label: 'Target Locations',
+                      icon: Icons.location_on_rounded,
+                      hint: 'Bangalore, Remote, etc.',
+                    ),
+                    const SizedBox(height: 24),
+                    _buildTextField(
+                      controller: _rolesController,
+                      label: 'Target Roles',
+                      icon: Icons.work_rounded,
+                      hint: 'AI Engineer, ML Engineer',
+                    ),
+                    const SizedBox(height: 32),
+                    const Text(
+                      'Experience required (Years)',
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.trending_up_rounded, size: 20, color: AppTheme.primary),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Slider(
+                            value: _experienceYears.toDouble(),
+                            min: 0,
+                            max: 10,
+                            divisions: 10,
+                            label: '$_experienceYears years',
+                            activeColor: AppTheme.primary,
+                            onChanged: (val) => setState(() => _experienceYears = val.toInt()),
+                          ),
+                        ),
+                        Text(
+                          '$_experienceYears yrs',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 40),
+              SizedBox(
+                height: 54,
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _saving ? null : _saveSettings,
+                  icon: _saving 
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.check_circle_rounded),
+                  label: const Text('Save Preferences', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Center(
+                child: Text(
+                  'Connected to: job-applying-agent.onrender.com',
+                  style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                ),
+              ),
+              const SizedBox(height: 60),
+            ],
+          ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 12),
+      child: Text(
+        title,
+        style: const TextStyle(
+          color: AppTheme.primary,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.2,
+        ),
       ),
     );
   }
 
-  Widget _aboutRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 90,
-            child: Text(label, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-          ),
-          Expanded(
-            child: Text(value, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
-          ),
-        ],
+  Widget _buildCard({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.surfaceLighter),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    required String hint,
+  }) {
+    return TextField(
+      controller: controller,
+      style: const TextStyle(color: AppTheme.textPrimary),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.bold),
+        hintText: hint,
+        hintStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+        prefixIcon: Icon(icon, color: AppTheme.primary, size: 20),
+        enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.surfaceLighter)),
+        focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.primary)),
       ),
     );
   }
 
   @override
   void dispose() {
-    _urlController.dispose();
+    _locationController.dispose();
+    _rolesController.dispose();
     super.dispose();
   }
 }

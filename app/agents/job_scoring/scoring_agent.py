@@ -76,7 +76,9 @@ def calculate_experience_match(experience_required: str) -> Dict[str, Any]:
     """
     import re
     
-    user_exp = USER_EXPERIENCE_YEARS  # Now 1 year
+    from app.config.settings import get_settings
+    settings = get_settings()
+    user_exp = settings.experience_years
     exp_lower = experience_required.lower() if experience_required else ""
     
     score = 0

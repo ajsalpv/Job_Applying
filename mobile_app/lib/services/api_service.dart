@@ -4,15 +4,11 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static String _baseUrl = 'https://job-applying.onrender.com';
+  static const String _baseUrl = 'https://job-applying-agent.onrender.com';
 
   static Future<String> getBaseUrl() async {
-    final prefs = await SharedPreferences.getInstance();
-    String url = prefs.getString('api_url') ?? _baseUrl;
-    if (url.endsWith('/')) {
-      url = url.substring(0, url.length - 1);
-    }
-    return url;
+    // URL is now hardcoded for stability as requested
+    return _baseUrl;
   }
 
   static Future<Map<String, dynamic>> getStats() async {
@@ -33,9 +29,8 @@ class ApiService {
   }
 
   static Future<void> setBaseUrl(String url) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('api_url', url);
-    debugPrint('⚙️ [API] Base URL updated: $url');
+    // No longer supported as URL is hardcoded
+    debugPrint('⚙️ [API] Base URL change requested but ignored (Fixed to $_baseUrl)');
   }
 
   static Future<List<dynamic>> getAllApplications() async {
@@ -113,6 +108,48 @@ class ApiService {
     ).timeout(const Duration(seconds: 10));
     if (response.statusCode != 200) {
       throw Exception('Failed to trigger scan: ${response.statusCode}');
+    }
+  }
+
+  static Future<void> updateStatus(String company, String role, String status, {String? notes, String? appliedAt}) async {
+    final base = await getBaseUrl();
+    final url = '$base/api/applications/status';
+    final response = await http.post(
+      Uri.parse(url),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({
+        'company': company,
+        'role': role,
+        'status': status,
+        'notes': notes ?? '',
+        'applied_at': appliedAt,
+      }),
+    ).timeout(const Duration(seconds: 10));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to update status: ${response.statusCode}');
+    }
+  }
+
+  static Future<Map<String, dynamic>> getAppSettings() async {
+    final base = await getBaseUrl();
+    final url = '$base/api/settings';
+    final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    throw Exception('Failed to get settings');
+  }
+
+  static Future<void> updateAppSettings(Map<String, dynamic> settings) async {
+    final base = await getBaseUrl();
+    final url = '$base/api/settings';
+    final response = await http.post(
+      Uri.parse(url),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(settings),
+    ).timeout(const Duration(seconds: 10));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to update settings');
     }
   }
 

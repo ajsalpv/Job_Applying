@@ -148,7 +148,8 @@ SHEETS_COLUMNS = {
     "applications": [
         "Date", "Platform", "Company", "Role", "Location",
         "Experience Required", "Fit Score", "Status", "Job URL",
-        "Job Description", "Interview Prep", "Skills to Learn", "Notes"
+        "Job Description", "Interview Prep", "Skills to Learn", 
+        "Posted At", "Applied At", "Notes"
     ],
     "metrics": [
         "Total Discovered", "Total Applied", "Interviews",

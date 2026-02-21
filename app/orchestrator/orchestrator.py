@@ -328,6 +328,10 @@ async def track_applications(state: WorkflowState) -> WorkflowState:
                 fit_score=job.get("fit_score", 0),
                 location=job.get("location", ""),
                 experience_required=job.get("experience_required", ""),
+                job_description=job.get("job_description", ""),
+                interview_prep=job.get("interview_prep", ""),
+                skills_to_learn=job.get("skills_to_learn", ""),
+                posted_date=job.get("posted_date") or job.get("posted_at") or "Today",
             )
         except Exception as e:
             logger.error(f"Tracking error for {job.get('company')}: {e}")

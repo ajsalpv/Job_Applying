@@ -110,6 +110,10 @@ class WellfoundAgent(IntelligentJobDiscoveryAgent):
                         self.logger.error(f"Smart Discovery failed: {e}")
 
                 # Standardized intelligent filtering
+                from app.config.settings import get_settings
+                settings = get_settings()
+                target_exp = settings.experience_years
+
                 for job in raw_jobs:
                     role_lower = job.get("role", "").lower()
                     exp_lower = job.get("experience_required", "").lower()
@@ -119,15 +123,17 @@ class WellfoundAgent(IntelligentJobDiscoveryAgent):
                     if "computer vision" in role_lower:
                         continue
                         
-                    # Refined Junior-Friendly Filter
-                    is_junior_friendly = any(kw in exp_lower for kw in ["0", "1", "2", "fresher", "entry", "intern", "junior"])
-                    has_high_exp = any(kw in exp_lower for kw in ["5", "6", "7", "8", "9", "5+", "8+", "10+"])
+                    # Dynamic Experience Filtering
+                    import re
+                    exp_nums = re.findall(r'\d+', exp_lower)
+                    min_exp = int(exp_nums[0]) if exp_nums else 0
                     
-                    if any(kw in role_lower for kw in ["senior", "staff", "principal", "lead", "sr.", "manager"]):
+                    if min_exp > (target_exp + 2):
                         continue
                         
-                    if has_high_exp and not is_junior_friendly:
-                        continue
+                    if any(kw in role_lower for kw in ["senior", "staff", "principal", "lead", "sr.", "manager"]):
+                        if target_exp < 5:
+                            continue
                     
                     ai_keywords = ["ai", "ml", "machine learning", "llm", "nlp", "deep learning", "genai", "artificial intelligence", "data scientist"]
                     search_kws = keywords.lower().split()

@@ -51,10 +51,12 @@ async def log_new_application(
         fit_score=fit_score,
         status=ApplicationStatus.DISCOVERED,
         job_url=job_url,
-        job_description=job_description[:500] if job_description else "",
+        job_description=job_description if job_description else "",
         interview_prep=interview_prep,
         skills_to_learn=skills_to_learn,
-        notes=f"Posted: {posted_date}",
+        posted_at=posted_date,
+        applied_at="",
+        notes=f"Found: {datetime.now().strftime('%Y-%m-%d')}",
     )
     
     # Try to log to Google Sheets (best-effort, don't block notifications)

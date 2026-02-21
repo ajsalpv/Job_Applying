@@ -1,7 +1,7 @@
 """
 API Routes - FastAPI endpoints for job application agent
 """
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from app.api.schemas import (
     JobSearchRequest,
@@ -9,6 +9,7 @@ from app.api.schemas import (
     JobListing,
     ApproveJobsRequest,
     UpdateStatusRequest,
+    SettingsUpdateRequest,
     GenerateContentRequest,
     ResumeOptimization,
     CoverLetterResponse,
@@ -23,41 +24,54 @@ from app.api.schemas import (
 from app.orchestrator.state_manager import WorkflowState
 from app.orchestrator.scheduler import scheduler
 from app.tools.utils.logger import get_logger
+from app.config.settings import get_settings
 
 logger = get_logger("api")
 router = APIRouter()
 
-# Store workflow state between requests (in production, use Redis/database)
+# Store workflow state between requests
 _workflow_state: WorkflowState = None
 
 
 @router.get("/health")
 async def health_check():
-    """Health check endpoint with loop info"""
-    import asyncio
-    loop = asyncio.get_running_loop()
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "job-application-agent"}
+
+
+@router.get("/settings")
+async def get_app_settings():
+    """Get current user settings"""
+    settings = get_settings()
     return {
-        "status": "healthy", 
-        "service": "job-application-agent",
-        "loop": type(loop).__name__
+        "user_location": settings.user_location,
+        "experience_years": settings.experience_years,
+        "target_roles": settings.target_roles,
     }
 
+
+@router.post("/settings", response_model=APIResponse)
+async def update_app_settings(request: SettingsUpdateRequest):
+    """Update user settings dynamically"""
+    settings = get_settings()
+    if request.user_location is not None:
+        settings.user_location = request.user_location
+    if request.experience_years is not None:
+        settings.experience_years = request.experience_years
+    if request.target_roles is not None:
+        settings.target_roles = request.target_roles
+    
+    settings.save_dynamic_settings()
+    return APIResponse(success=True, message="Settings updated and persisted")
 
 
 @router.post("/jobs/search", response_model=JobSearchResponse)
 async def search_jobs(request: JobSearchRequest):
-    """
-    Search for jobs across platforms.
-    
-    This starts the discovery phase and scores jobs.
-    Returns jobs ready for human review.
-    """
+    """Search for jobs across platforms"""
     global _workflow_state
-    
     logger.info(f"Starting job search: {request.keywords}")
     
     try:
-        # Run discovery phase (Lazy Load)
         from app.orchestrator import run_discovery_phase
         state = await run_discovery_phase(
             keywords=request.keywords,
@@ -65,10 +79,8 @@ async def search_jobs(request: JobSearchRequest):
             platforms=request.platforms,
             min_score=request.min_score,
         )
-        
         _workflow_state = state
         
-        # Convert to response format
         jobs = []
         for job in state.get("scored_jobs", []):
             jobs.append(JobListing(
@@ -89,169 +101,22 @@ async def search_jobs(request: JobSearchRequest):
             total_scored=len(jobs),
             message=f"Found {len(jobs)} jobs matching your criteria"
         )
-        
     except Exception as e:
         logger.error(f"Search error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/jobs/approve", response_model=APIResponse)
-async def approve_jobs(request: ApproveJobsRequest, background_tasks: BackgroundTasks):
-    """
-    Approve jobs for application.
-    
-    This triggers resume/cover letter generation for approved jobs.
-    """
-    global _workflow_state
-    
-    if not _workflow_state:
-        raise HTTPException(status_code=400, detail="No active job search. Run search first.")
-    
-    logger.info(f"Approving {len(request.job_urls)} jobs")
-    
-    try:
-        # Continue workflow with approved jobs (Lazy Load)
-        from app.orchestrator import run_application_phase
-        _workflow_state = await run_application_phase(
-            state=_workflow_state,
-            approved_jobs=request.job_urls,
-        )
-        
-        return APIResponse(
-            success=True,
-            message=f"Processing {len(request.job_urls)} approved jobs",
-            data={
-                "resume_count": len(_workflow_state.get("resume_optimizations", [])),
-                "cover_letter_count": len(_workflow_state.get("cover_letters", [])),
-            }
-        )
-        
-    except Exception as e:
-        logger.error(f"Approval error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/resume/generate", response_model=ResumeOptimization)
-async def generate_resume(request: GenerateContentRequest):
-    """Generate optimized resume bullets for a specific job"""
-    try:
-        from app.agents.resume_generator import resume_agent
-        result = await resume_agent.generate_optimized_bullets(
-            company=request.company,
-            role=request.role,
-            job_description=request.job_description,
-        )
-        
-        return ResumeOptimization(
-            company=request.company,
-            role=request.role,
-            optimized_bullets=result.get("optimized_bullets", []),
-            keywords_included=result.get("keywords_included", []),
-            skill_highlights=result.get("skill_highlights", []),
-        )
-        
-    except Exception as e:
-        logger.error(f"Resume generation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/cover-letter/generate", response_model=CoverLetterResponse)
-async def generate_cover_letter(request: GenerateContentRequest):
-    """Generate a cover letter for a specific job"""
-    try:
-        from app.agents.resume_generator import cover_letter_agent
-        letter = await cover_letter_agent.generate_cover_letter(
-            company=request.company,
-            role=request.role,
-            job_description=request.job_description,
-        )
-        
-        return CoverLetterResponse(
-            company=request.company,
-            role=request.role,
-            cover_letter=letter,
-        )
-        
-    except Exception as e:
-        logger.error(f"Cover letter error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/applications/stats", response_model=ApplicationStats)
-async def get_stats():
-    """Get application statistics"""
-    try:
-        from app.agents.tracking import tracking_agent
-        stats = await tracking_agent.get_statistics()
-        
-        return ApplicationStats(
-            total_discovered=stats.get("total_discovered", 0),
-            total_applied=stats.get("total_applied", 0),
-            interviews=stats.get("interviews", 0),
-            offers=stats.get("offers", 0),
-            rejected=stats.get("rejected", 0),
-            no_response=stats.get("no_response", 0),
-            success_rate=stats.get("success_rate", 0.0),
-        )
-        
-    except Exception as e:
-        logger.error(f"Stats error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/applications/followups", response_model=FollowUpsResponse)
-async def get_followups(days_threshold: int = 7):
-    """Get applications needing follow-up"""
-    try:
-        from app.agents.tracking import tracking_agent
-        followups = await tracking_agent.get_pending_followups(days_threshold)
-        
-        items = [
-            FollowUpItem(
-                company=f.get("company", ""),
-                role=f.get("role", ""),
-                applied_date=f.get("applied_date", ""),
-                days_since=f.get("days_since", 0),
-                status=f.get("status", ""),
-            )
-            for f in followups
-        ]
-        
-        return FollowUpsResponse(followups=items, count=len(items))
-        
-    except Exception as e:
-        logger.error(f"Followups error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/applications/status", response_model=APIResponse)
-async def update_status(request: UpdateStatusRequest):
-    """Update application status"""
-    try:
-        from app.agents.tracking import tracking_agent
-        success = await tracking_agent.update_status(
-            company=request.company,
-            role=request.role,
-            new_status=request.status,
-            notes=request.notes or "",
-        )
-        
-        return APIResponse(
-            success=success,
-            message="Status updated" if success else "Failed to update status",
-        )
-        
-    except Exception as e:
-        logger.error(f"Status update error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.get("/applications", response_model=ApplicationListResponse)
 async def get_all_applications():
-    """Get all applications details"""
+    """Get all applications details, sorted by date (newest first)"""
     try:
         from app.agents.tracking import tracking_agent
-        apps = await tracking_agent.get_all_applications()
+        apps = await tracking_agent.get_all_applications(today_only=False)
+        
+        # Determine sort key - prefer date and potentially time if available
+        # JobApplication objects have 'date' (YYYY-MM-DD)
+        # Sort descending
+        apps.sort(key=lambda x: x.date, reverse=True)
         
         items = []
         for app in apps:
@@ -267,103 +132,45 @@ async def get_all_applications():
                 job_description=app.job_description,
                 interview_prep=app.interview_prep,
                 skills_to_learn=app.skills_to_learn,
+                posted_at=app.posted_at,
+                applied_at=app.applied_at,
                 notes=app.notes,
             ))
             
         return ApplicationListResponse(applications=items, count=len(items))
-        
     except Exception as e:
-        logger.error(f"Get all applications error: {e}")
+        logger.error(f"Get applications error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/scheduler/status", response_model=SchedulerStatus)
-async def get_scheduler_status():
-    """Get scheduler status"""
-    return SchedulerStatus(
-        running=scheduler._running,
-        interval_minutes=scheduler.settings.check_interval_minutes,
-    )
-
-
-@router.post("/scheduler/start")
-async def start_scheduler():
-    """Start the scheduler"""
-    await scheduler.start()
-    return {"message": "Scheduler started"}
-
-
-@router.post("/jobs/scan", response_model=APIResponse)
-async def scan_now(background_tasks: BackgroundTasks):
-    """Manually trigger job discovery"""
-    from app.config.settings import get_settings
-    settings = get_settings()
-    
-    async def run_scan():
-        from app.orchestrator import run_discovery_phase
-        search_locations = [loc.strip() for loc in settings.user_location.split(",")]
-        await run_discovery_phase(
-            locations=search_locations,
-            keywords=settings.target_roles,
+@router.post("/applications/status", response_model=APIResponse)
+async def update_status(request: UpdateStatusRequest):
+    """Update application status"""
+    try:
+        from app.agents.tracking import tracking_agent
+        success = await tracking_agent.update_status(
+            company=request.company,
+            role=request.role,
+            new_status=request.status,
+            notes=request.notes or "",
         )
-
-    background_tasks.add_task(run_scan)
-    return APIResponse(success=True, message="Job discovery scan started in background")
-
-
-@router.post("/scheduler/stop")
-async def stop_scheduler():
-    """Stop the scheduler"""
-    await scheduler.stop()
-    return {"message": "Scheduler stopped"}
-
-
-@router.get("/workflow/state")
-async def get_workflow_state():
-    """Get current workflow state (for debugging)"""
-    global _workflow_state
-    
-    if not _workflow_state:
-        return {"state": None, "message": "No active workflow"}
-    
-    return {
-        "state": {
-            "current_step": _workflow_state.get("current_step"),
-            "discovered_count": len(_workflow_state.get("discovered_jobs", [])),
-            "scored_count": len(_workflow_state.get("scored_jobs", [])),
-            "approved_count": len(_workflow_state.get("approved_jobs", [])),
-            "errors": _workflow_state.get("errors", []),
-        }
-    }
-
-
-# ============================================================
-# SUPERVISOR + MOBILE APP ENDPOINTS
-# ============================================================
-
-@router.get("/supervisor/status")
-async def supervisor_status():
-    """Get Supervisor Agent health report for all platforms"""
-    from app.agents.supervisor_agent import supervisor
-    return supervisor.get_health_report()
-
-
-@router.post("/supervisor/re-enable/{platform}")
-async def re_enable_platform(platform: str):
-    """Re-enable a disabled platform"""
-    from app.agents.supervisor_agent import supervisor
-    supervisor.re_enable_platform(platform)
-    return {"success": True, "message": f"{platform} re-enabled"}
+        return APIResponse(success=success, message="Status updated")
+    except Exception as e:
+        logger.error(f"Status update error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/jobs/by-platform/{platform}")
 async def get_jobs_by_platform(platform: str):
-    """Get all tracked jobs filtered by platform (for mobile app)"""
+    """Get all tracked jobs filtered by platform, newest first"""
     try:
         from app.agents.tracking import tracking_agent
-        all_apps = await tracking_agent.get_all_applications()
+        all_apps = await tracking_agent.get_all_applications(today_only=False)
         
-        filtered = [
+        filtered = [app for app in all_apps if app.platform.lower() == platform.lower()]
+        filtered.sort(key=lambda x: x.date, reverse=True)
+        
+        items = [
             {
                 "date": app.date,
                 "platform": app.platform,
@@ -376,13 +183,63 @@ async def get_jobs_by_platform(platform: str):
                 "job_description": app.job_description,
                 "interview_prep": app.interview_prep,
                 "skills_to_learn": app.skills_to_learn,
+                "posted_at": app.posted_at,
+                "applied_at": app.applied_at,
                 "notes": app.notes,
             }
-            for app in all_apps
-            if app.platform.lower() == platform.lower()
+            for app in filtered
         ]
         
-        return {"platform": platform, "jobs": filtered, "count": len(filtered)}
+        return {"platform": platform, "jobs": items, "count": len(items)}
     except Exception as e:
         logger.error(f"Jobs by platform error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/applications/stats", response_model=ApplicationStats)
+async def get_stats():
+    """Get stats"""
+    try:
+        from app.agents.tracking import tracking_agent
+        stats = await tracking_agent.get_statistics()
+        return ApplicationStats(**stats)
+    except Exception as e:
+        logger.error(f"Stats error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Administrative routes
+@router.get("/scheduler/status", response_model=SchedulerStatus)
+async def get_scheduler_status():
+    return SchedulerStatus(running=scheduler._running, interval_minutes=scheduler.settings.check_interval_minutes)
+
+@router.post("/scheduler/start")
+async def start_scheduler():
+    await scheduler.start()
+    return {"message": "Scheduler started"}
+
+@router.post("/scheduler/stop")
+async def stop_scheduler():
+    await scheduler.stop()
+    return {"message": "Scheduler stopped"}
+
+@router.post("/jobs/scan", response_model=APIResponse)
+async def scan_now(background_tasks: BackgroundTasks):
+    from app.config.settings import get_settings
+    settings = get_settings()
+    async def run_scan():
+        from app.orchestrator import run_discovery_phase
+        await run_discovery_phase(locations=settings.user_location.split(","), keywords=settings.target_roles)
+    background_tasks.add_task(run_scan)
+    return APIResponse(success=True, message="Job discovery scan started")
+
+@router.get("/supervisor/status")
+async def supervisor_status():
+    from app.agents.supervisor_agent import supervisor
+    return supervisor.get_health_report()
+
+@router.post("/supervisor/re-enable/{platform}")
+async def re_enable_platform(platform: str):
+    from app.agents.supervisor_agent import supervisor
+    supervisor.re_enable_platform(platform)
+    return {"success": True, "message": f"{platform} re-enabled"}

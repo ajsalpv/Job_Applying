@@ -29,6 +29,14 @@ class UpdateStatusRequest(BaseModel):
     role: str
     status: ApplicationStatus
     notes: Optional[str] = ""
+    applied_at: Optional[str] = None
+
+
+class SettingsUpdateRequest(BaseModel):
+    """Request to update app settings"""
+    user_location: Optional[str] = None
+    experience_years: Optional[int] = None
+    target_roles: Optional[str] = None
 
 
 class GenerateContentRequest(BaseModel):
@@ -125,6 +133,8 @@ class JobApplicationItem(BaseModel):
     job_description: str
     interview_prep: str
     skills_to_learn: str
+    posted_at: str = ""
+    applied_at: str = ""
     notes: str
 
 
@@ -138,5 +148,3 @@ class SchedulerStatus(BaseModel):
     """Scheduler status response"""
     running: bool
     interval_minutes: float
-
-

@@ -179,7 +179,14 @@ class SheetsClient:
                 if row[2] == company and row[3] == role:
                     sheet.update_cell(i, 8, new_status)  # Status column
                     if notes:
-                        sheet.update_cell(i, 10, notes)  # Notes column
+                        sheet.update_cell(i, 15, notes)  # Notes column (Shifted to index 15)
+                    
+                    # Update applied_at if status is 'applied'
+                    if new_status.lower() == "applied":
+                        from datetime import datetime
+                        applied_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        sheet.update_cell(i, 14, applied_at) # Applied At column
+                    
                     logger.info(f"Updated status for {company} - {role}: {new_status}")
                     return True
             

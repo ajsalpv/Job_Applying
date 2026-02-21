@@ -32,9 +32,11 @@ class JobApplication(BaseModel):
     fit_score: int = 0
     status: ApplicationStatus = ApplicationStatus.DISCOVERED
     job_url: str = ""
-    job_description: str = ""  # NEW: Store full JD
-    interview_prep: str = ""   # NEW: Interview preparation tips
-    skills_to_learn: str = ""  # NEW: Skills to learn before interview
+    job_description: str = ""  # Store full JD
+    interview_prep: str = ""   # Interview preparation tips
+    skills_to_learn: str = ""  # Skills to learn before interview
+    posted_at: str = ""        # When the job was posted
+    applied_at: str = ""       # When the user applied
     notes: str = ""
     
     def to_row(self) -> List[str]:
@@ -49,9 +51,11 @@ class JobApplication(BaseModel):
             str(self.fit_score),
             self.status.value,
             self.job_url,
-            self.job_description[:500] if self.job_description else "",  # Truncate for sheets
+            self.job_description[:1000] if self.job_description else "",  # Increased limit a bit
             self.interview_prep,
             self.skills_to_learn,
+            self.posted_at,
+            self.applied_at,
             self.notes,
         ]
     
@@ -71,7 +75,9 @@ class JobApplication(BaseModel):
             job_description=row[9] if len(row) > 9 else "",
             interview_prep=row[10] if len(row) > 10 else "",
             skills_to_learn=row[11] if len(row) > 11 else "",
-            notes=row[12] if len(row) > 12 else "",
+            posted_at=row[12] if len(row) > 12 else "",
+            applied_at=row[13] if len(row) > 13 else "",
+            notes=row[14] if len(row) > 14 else "",
         )
 
 
