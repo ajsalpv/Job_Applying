@@ -5,7 +5,7 @@ Acts as a fallback when hardcoded selectors fail.
 from typing import Dict, Any, List, Optional
 import json
 import re
-from app.tools.llm.groq_client import GroqClient
+from app.tools.llm.groq_client import groq_client
 from app.tools.utils.logger import get_logger
 
 logger = get_logger("smart_discovery")
@@ -17,7 +17,7 @@ class SmartDiscoveryAgent:
     """
     
     def __init__(self):
-        self.llm = GroqClient()
+        self.llm = groq_client  # Use the singleton instance
         
     async def analyze_page(self, page_content: str, url: str) -> List[Dict[str, Any]]:
         """
@@ -31,29 +31,28 @@ class SmartDiscoveryAgent:
             List of extracted job dictionaries
         """
         # Truncate content to fit context window (focus on body/main)
-        # We need a smart way to reduce token usage
         clean_content = self._clean_html(page_content)
         
-        prompt = f"""
-        You are an expert web scraper. I will give you a snippet of HTML from a job search page ({url}).
-        Your task is to identify the job listings and extract the following for EACH job found:
-        - Role (Job Title)
-        - Company Name
-        - Location
-        - Experience Required (if mentioned)
-        - Job URL (href)
+        system_prompt = "You are an expert web scraper that extracts structured job data from HTML. Return ONLY a valid JSON array, no explanation."
         
-        Return the data as a pure JSON list of objects. 
-        If no jobs are found, return an empty list [].
-        Do not include any explanation, just the JSON.
-        
-        HTML Snippet:
-        {clean_content[:15000]} 
-        """
+        user_prompt = f"""Analyze this HTML from a job search page ({url}).
+Extract ALL job listings. For EACH job, return:
+- "role": Job Title
+- "company": Company Name
+- "location": Location
+- "experience_required": Experience (if mentioned, else "")
+- "job_url": Full URL (href)
+
+Return as a pure JSON array of objects. If no jobs found, return [].
+
+HTML:
+{clean_content[:12000]}"""
         
         try:
-            response = await self.llm.generate(prompt)
-            return self._parse_json(response)
+            response = await self.llm.invoke(system_prompt, user_prompt)
+            jobs = self._parse_json(response)
+            logger.info(f"Smart Discovery extracted {len(jobs)} jobs from {url}")
+            return jobs
         except Exception as e:
             logger.error(f"Smart analysis failed: {e}")
             return []

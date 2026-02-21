@@ -90,32 +90,58 @@ class EmailSender:
                 creds = Credentials.from_authorized_user_file(self.settings.gmail_token_path)
 
             if creds:
-                logger.info(f"Using Official Gmail API (HTTP) for 100% Google Security...")
-                from googleapiclient.discovery import build
-                service = build('gmail', 'v1', credentials=creds)
+                # AUTO-REFRESH: If token is expired, refresh it automatically
+                if creds.expired and creds.refresh_token:
+                    try:
+                        from google.auth.transport.requests import Request
+                        logger.info("🔄 Gmail token expired, auto-refreshing...")
+                        creds.refresh(Request())
+                        logger.info("✅ Gmail token refreshed successfully!")
+                        
+                        # Save refreshed token back to env-compatible format
+                        refreshed_token = {
+                            "token": creds.token,
+                            "refresh_token": creds.refresh_token,
+                            "token_uri": creds.token_uri,
+                            "client_id": creds.client_id,
+                            "client_secret": creds.client_secret,
+                            "scopes": creds.scopes,
+                        }
+                        logger.info("💾 Refreshed token ready (update GMAIL_TOKEN_JSON env var for persistence)")
+                    except Exception as e:
+                        logger.error(f"Token refresh failed: {e}. User must re-authenticate.")
+                        creds = None
                 
-                # Build Message
-                msg = MIMEMultipart()
-                msg['To'] = to_email
-                msg['Subject'] = f"Application for {position_name} - {self.settings.user_name}"
+                if not creds or not creds.valid:
+                    logger.error("❌ Gmail credentials invalid even after refresh attempt")
+                    # Fall through to SMTP
+                else:
+                    logger.info(f"Using Official Gmail API (HTTP) for 100% Google Security...")
+                    from googleapiclient.discovery import build
+                    service = build('gmail', 'v1', credentials=creds)
                 
-                # HTML Body
-                html_content = body_content.replace("\n", "<br>")
-                import re
-                html_content = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', html_content)
-                msg.attach(MIMEText(html_content, 'html'))
-                
-                # Attachment
-                with open(resume_path, "rb") as f:
-                    attach = MIMEApplication(f.read(), _subtype="pdf")
-                    attach.add_header('Content-Disposition', 'attachment', filename="Ajsalpv_CV.pdf")
-                    msg.attach(attach)
-                
-                raw_msg = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-                sent_msg = service.users().messages().send(userId='me', body={'raw': raw_msg}).execute()
-                
-                logger.info(f"Email sent via Gmail API: {sent_msg['id']}")
-                return True, "Email sent successfully via Official Gmail API (Safe & Free)!"
+                    # Build Message
+                    msg = MIMEMultipart()
+                    msg['To'] = to_email
+                    msg['Subject'] = f"Application for {position_name} - {self.settings.user_name}"
+                    
+                    # HTML Body
+                    html_content = body_content.replace("\n", "<br>")
+                    import re
+                    html_content = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', html_content)
+                    msg.attach(MIMEText(html_content, 'html'))
+                    
+                    # Attachment
+                    with open(resume_path, "rb") as f:
+                        attach = MIMEApplication(f.read(), _subtype="pdf")
+                        attach.add_header('Content-Disposition', 'attachment', filename="Ajsalpv_CV.pdf")
+                        msg.attach(attach)
+                    
+                    raw_msg = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+                    sent_msg = service.users().messages().send(userId='me', body={'raw': raw_msg}).execute()
+                    
+                    logger.info(f"Email sent via Gmail API: {sent_msg['id']}")
+                    return True, "Email sent successfully via Official Gmail API (Safe & Free)!"
 
             # --- METHOD 2: SMTP (Fallback for Local) ---
             # Setup Message for SMTP
