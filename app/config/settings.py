@@ -47,8 +47,8 @@ class Settings(BaseSettings):
     check_interval_minutes: float = Field(default=120.0, env="CHECK_INTERVAL_MINUTES")
 
     # Notifications
-    telegram_bot_token: str = Field(default="8380477714:AAEB790RVdawDIzOWupFl191cbIJ7dH1yqo", env="TELEGRAM_BOT_TOKEN")
-    telegram_chat_id: str = Field(default="1629864542", env="TELEGRAM_CHAT_ID")
+    telegram_bot_token: str = Field(default="", env="TELEGRAM_BOT_TOKEN")
+    telegram_chat_id: str = Field(default="", env="TELEGRAM_CHAT_ID")
     
     # SMTP Configuration
     smtp_server: str = Field(default="smtp.gmail.com", env="SMTP_SERVER")

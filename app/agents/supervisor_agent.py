@@ -1,117 +1,119 @@
-"""
-Supervisor Agent - Monitors all discovery agents, tracks health, auto-heals failures.
-"""
-import time
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+from datetime import datetime
+from app.agents.base_agent import LangGraphAgent, AgentResult
 from app.tools.utils.logger import get_logger
+from app.tools.notifications.telegram_notifier import notifier
 
 logger = get_logger("supervisor")
 
 
-class SupervisorAgent:
+class SupervisorAgentLangGraph(LangGraphAgent):
     """
-    Central monitoring agent that oversees all job discovery scrapers.
-    
-    Capabilities:
-    - Track success/failure per platform
-    - Auto-disable failing scrapers after N consecutive failures
-    - Generate health reports for Telegram/API
+    Supervisor Agent - Monitors all discovery agents, tracks health, and auto-heals.
+    Inherits from LangGraphAgent for architectural consistency.
     """
-    
-    MAX_CONSECUTIVE_FAILURES = 3
     
     def __init__(self):
-        self.platform_health: Dict[str, Dict[str, Any]] = {}
-        self._initialize_platforms()
-    
-    def _initialize_platforms(self):
-        platforms = ["indeed", "naukri", "hirist", "glassdoor", "wellfound", "linkedin"]
-        for p in platforms:
-            self.platform_health[p] = {
-                "status": "active",        # active | degraded | disabled
-                "total_runs": 0,
-                "total_jobs_found": 0,
-                "consecutive_failures": 0,
-                "last_run_time": None,
-                "last_run_duration": 0,
-                "last_error": None,
-                "last_job_count": 0,
-            }
-    
-    def record_success(self, platform: str, job_count: int, duration: float):
-        """Record a successful scraper run"""
-        h = self.platform_health.get(platform, {})
-        h["status"] = "active"
-        h["total_runs"] = h.get("total_runs", 0) + 1
-        h["total_jobs_found"] = h.get("total_jobs_found", 0) + job_count
-        h["consecutive_failures"] = 0
-        h["last_run_time"] = time.time()
-        h["last_run_duration"] = round(duration, 2)
-        h["last_error"] = None
-        h["last_job_count"] = job_count
-        self.platform_health[platform] = h
-        logger.info(f"✅ [{platform}] Success: {job_count} jobs in {duration:.1f}s")
-    
-    def record_failure(self, platform: str, error: str, duration: float):
-        """Record a failed scraper run"""
-        h = self.platform_health.get(platform, {})
-        h["total_runs"] = h.get("total_runs", 0) + 1
-        h["consecutive_failures"] = h.get("consecutive_failures", 0) + 1
-        h["last_run_time"] = time.time()
-        h["last_run_duration"] = round(duration, 2)
-        h["last_error"] = error
-        h["last_job_count"] = 0
+        system_prompt = """You are the Supervisor Agent responsible for system health.
+Your job is to monitor scrape success/failure rates, jobs discovered, and platform health.
+If a platform fails repeatedly, you must disable it to protect the system.
+You can also re-enable platforms when requested."""
         
-        if h["consecutive_failures"] >= self.MAX_CONSECUTIVE_FAILURES:
-            h["status"] = "disabled"
-            logger.error(f"🚫 [{platform}] DISABLED after {h['consecutive_failures']} consecutive failures")
-        else:
-            h["status"] = "degraded"
-            logger.warning(f"⚠️ [{platform}] Failure #{h['consecutive_failures']}: {error}")
-        
-        self.platform_health[platform] = h
-    
+        super().__init__("supervisor", system_prompt)
+        self.health_data = {}  # platform -> {failures, success_count, last_error, status}
+        self.max_failures = 3
+
     def is_platform_active(self, platform: str) -> bool:
-        """Check if a platform is healthy enough to run"""
-        h = self.platform_health.get(platform, {})
-        return h.get("status") != "disabled"
-    
+        """Check if a platform is currently active"""
+        data = self.health_data.get(platform, {"status": "active"})
+        return data.get("status") == "active"
+
+    def record_success(self, platform: str, jobs_found: int, duration: float):
+        """Record a successful scrape session"""
+        if platform not in self.health_data:
+            self.health_data[platform] = {
+                "failures": 0, 
+                "success_count": 0, 
+                "total_jobs": 0,
+                "status": "active",
+                "avg_duration": 0
+            }
+        
+        data = self.health_data[platform]
+        data["failures"] = 0  # Reset on success
+        data["success_count"] += 1
+        data["total_jobs"] += jobs_found
+        data["last_success"] = str(datetime.now())
+        data["status"] = "active"
+        
+        # Simple moving average for duration
+        if data["avg_duration"] == 0:
+            data["avg_duration"] = duration
+        else:
+            data["avg_duration"] = (data["avg_duration"] * 0.7) + (duration * 0.3)
+        
+        logger.info(f"✅ Supervisor: {platform} recorded success ({jobs_found} jobs)")
+
+    def record_failure(self, platform: str, error: str, duration: float):
+        """Record a platform failure and auto-disable if needed"""
+        if platform not in self.health_data:
+            self.health_data[platform] = {
+                "failures": 0, 
+                "success_count": 0, 
+                "total_jobs": 0,
+                "status": "active",
+                "avg_duration": 0
+            }
+        
+        data = self.health_data[platform]
+        data["failures"] += 1
+        data["last_error"] = str(error)
+        data["last_failure_time"] = str(datetime.now())
+        
+        logger.warning(f"⚠️ Supervisor: {platform} failure #{data['failures']}: {error}")
+        
+        if data["failures"] >= self.max_failures:
+            data["status"] = "disabled"
+            logger.error(f"🚫 Supervisor: AUTO-DISABLING {platform} after {self.max_failures} failures.")
+            # Notify user via Telegram
+            self._notify_disabling(platform, error)
+
+    def _notify_disabling(self, platform: str, error: str):
+        """Send Telegram alert about disabled platform"""
+        try:
+            import asyncio
+            msg = (
+                f"🚨 *Supervisor Alert*\n"
+                f"Platform *{platform.upper()}* has been automatically *DISABLED*.\n"
+                f"Reason: {self.max_failures} consecutive failures.\n"
+                f"Last Error: `{error}`\n\n"
+                f"Please check logs or re-enable via mobile app."
+            )
+            # We use the common notifier
+            asyncio.create_task(notifier.send_notification(msg))
+        except Exception as e:
+            logger.error(f"Failed to send supervisor notification: {e}")
+
     def re_enable_platform(self, platform: str):
-        """Manually re-enable a disabled platform"""
-        if platform in self.platform_health:
-            self.platform_health[platform]["status"] = "active"
-            self.platform_health[platform]["consecutive_failures"] = 0
-            logger.info(f"🔄 [{platform}] Re-enabled by user")
-    
+        """Manually re-enable a platform"""
+        if platform in self.health_data:
+            self.health_data[platform]["status"] = "active"
+            self.health_data[platform]["failures"] = 0
+            logger.info(f"🔄 Supervisor: Platform {platform} re-enabled manually.")
+            return True
+        return False
+
     def get_health_report(self) -> Dict[str, Any]:
-        """Generate a complete health report"""
-        active = sum(1 for h in self.platform_health.values() if h["status"] == "active")
-        degraded = sum(1 for h in self.platform_health.values() if h["status"] == "degraded")
-        disabled = sum(1 for h in self.platform_health.values() if h["status"] == "disabled")
-        total_jobs = sum(h.get("total_jobs_found", 0) for h in self.platform_health.values())
-        
+        """Get summary of all platform health for the UI"""
         return {
-            "summary": {
-                "active_platforms": active,
-                "degraded_platforms": degraded,
-                "disabled_platforms": disabled,
-                "total_jobs_found": total_jobs,
-            },
-            "platforms": self.platform_health,
+            "timestamp": str(datetime.now()),
+            "platforms": self.health_data
         }
-    
-    def get_telegram_report(self) -> str:
-        """Generate a Telegram-friendly health report"""
-        lines = ["🤖 *Supervisor Health Report*\n"]
-        
-        for name, h in self.platform_health.items():
-            icon = "✅" if h["status"] == "active" else ("⚠️" if h["status"] == "degraded" else "🚫")
-            lines.append(f"{icon} *{name.title()}*: {h['last_job_count']} jobs | {h['status']}")
-        
-        report = self.get_health_report()
-        lines.append(f"\n📊 Total: {report['summary']['total_jobs_found']} jobs found")
-        return "\n".join(lines)
+
+    async def run(self, **kwargs) -> AgentResult:
+        """Main entry for LangGraph-based status reporting"""
+        return self._success(data=self.get_health_report())
 
 
-# Singleton
-supervisor = SupervisorAgent()
+# Singleton instance
+supervisor = SupervisorAgentLangGraph()
