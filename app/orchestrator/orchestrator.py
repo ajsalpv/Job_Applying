@@ -94,36 +94,63 @@ async def discover_jobs(state: WorkflowState) -> WorkflowState:
     # Run for each platform
     async def search_platform(platform_name: str):
         async with semaphore:
+            # 🛡️ SUPERVISOR CHECK
+            from app.agents.supervisor_agent import supervisor
+            if not supervisor.is_platform_active(platform_name):
+                logger.warning(f"🚫 Platform {platform_name} is currently DISABLED by Supervisor. Skipping.")
+                return []
+
             platform_jobs = []
             agent = get_platform_agent(platform_name)
-
+            
             if not agent:
                 logger.warning(f"Unknown platform: {platform_name}")
                 return []
-                
-            for location in locations:
-                for keyword in keywords_list:
-                    try:
-                        logger.info(f"🔍 [{platform_name}] Searching '{keyword}' in {location}...")
-                        result = await agent.run(keywords=keyword, location=location)
-                        
-                        if result.success and result.data:
-                            jobs = result.data.get("jobs", [])
-                            new_count = 0
-                            for job in jobs:
-                                url = job.get("job_url")
-                                if url and url not in seen_urls:
-                                    seen_urls.add(url)
-                                    platform_jobs.append(job)
-                                    new_count += 1
-                            
-                            logger.info(f"✅ {platform_name} found {len(jobs)} jobs ({new_count} new) for '{keyword}' in {location}")
-                    except Exception as e:
-                        logger.error(f"❌ Error on {platform_name} for {keyword} in {location}: {e}")
             
-            # Explicitly kill browser after this platform to free all RAM for the next platform
-            from app.tools.browser import playwright_manager
-            await playwright_manager.close()
+            import time
+            start_time = time.time()
+            failed = False
+            error_msg = None
+            total_jobs_found = 0
+                
+            try:
+                for location in locations:
+                    for keyword in keywords_list:
+                        try:
+                            logger.info(f"🔍 [{platform_name}] Searching '{keyword}' in {location}...")
+                            result = await agent.run(keywords=keyword, location=location)
+                            
+                            if result.success and result.data:
+                                jobs = result.data.get("jobs", [])
+                                total_jobs_found += len(jobs)
+                                new_count = 0
+                                for job in jobs:
+                                    url = job.get("job_url")
+                                    if url and url not in seen_urls:
+                                        seen_urls.add(url)
+                                        platform_jobs.append(job)
+                                        new_count += 1
+                                
+                                logger.info(f"✅ {platform_name} found {len(jobs)} jobs ({new_count} new) for '{keyword}' in {location}")
+                            elif not result.success:
+                                failed = True
+                                error_msg = result.message
+                        except Exception as e:
+                            failed = True
+                            error_msg = str(e)
+                            logger.error(f"❌ Error on {platform_name} for {keyword} in {location}: {e}")
+                
+                # 🛡️ RECORD RESULT
+                duration = time.time() - start_time
+                if failed:
+                    supervisor.record_failure(platform_name, error_msg or "Unknown error", duration)
+                else:
+                    supervisor.record_success(platform_name, total_jobs_found, duration)
+
+            finally:
+                # Explicitly kill browser after this platform to free all RAM for the next platform
+                from app.tools.browser import playwright_manager
+                await playwright_manager.close()
             
             return platform_jobs
 

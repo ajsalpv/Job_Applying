@@ -1,0 +1,26 @@
+name: job_agent_app
+description: "AI Job Application Agent - Mobile Dashboard"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.6.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  http: ^1.2.0
+  url_launcher: ^6.2.0
+  shared_preferences: ^2.2.0
+  google_fonts: ^6.1.0
+  fl_chart: ^0.68.0
+  shimmer: ^3.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
