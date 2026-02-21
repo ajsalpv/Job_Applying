@@ -33,10 +33,13 @@ class SheetsClient:
             import os
             
             # 1. Try to load from environment variable first (Cloud-friendly)
-            if self.settings.google_sheets_credentials_json:
+            # Use manual os.getenv as fallback to Pydantic settings for maximum robustness
+            creds_json = self.settings.google_sheets_credentials_json or os.getenv("SHEETS_JSON") or os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON")
+            
+            if creds_json:
                 try:
                     # Clean the JSON string (strip spaces/newlines)
-                    raw_json = self.settings.google_sheets_credentials_json.strip()
+                    raw_json = creds_json.strip()
                     creds_dict = json.loads(raw_json)
                     creds = Credentials.from_service_account_info(
                         creds_dict,
@@ -53,14 +56,13 @@ class SheetsClient:
                     self.settings.google_sheets_credentials_path,
                     scopes=SCOPES,
                 )
-                logger.info(f"✅ Loaded Google Sheets credentials from file: {self.settings.google_sheets_credentials_path}")
+                logger.info(f"✅ Google Sheets: Loaded credentials from file: {self.settings.google_sheets_credentials_path}")
             
             # 3. No credentials found
             else:
                 msg = (
                     "❌ Google Sheets Credentials NOT FOUND.\n"
-                    "Please set GOOGLE_SHEETS_CREDENTIALS_JSON in Render or "
-                    f"add {self.settings.google_sheets_credentials_path} locally."
+                    "Please set SHEETS_JSON environment variable in Render."
                 )
                 logger.error(msg)
                 raise ValueError(msg)

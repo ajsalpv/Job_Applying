@@ -195,6 +195,32 @@ async def log_requests(request, call_next):
 app.include_router(router, prefix="/api", tags=["Jobs"])
 
 
+@app.on_event("startup")
+async def startup_event():
+    """Run diagnostics on startup"""
+    from app.config.settings import get_settings
+    import os
+    
+    settings = get_settings()
+    logger.info("🚩 --- SYSTEM STARTUP DIAGNOSTICS ---")
+    
+    # Check Sheets
+    sheets_env = os.getenv("SHEETS_JSON") or os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON")
+    logger.info(f"📊 Google Sheets Credentials: {'✅ DETECTED' if (settings.google_sheets_credentials_json or sheets_env) else '❌ MISSING (Set SHEETS_JSON)'}")
+    logger.info(f"📊 Google Sheet ID: {'✅ SET' if settings.google_sheet_id else '⚠️ NOT SET (Will create new sheet)'}")
+    
+    # Check Gmail
+    gmail_env = os.getenv("GMAIL_TOKEN_JSON")
+    logger.info(f"📧 Gmail Token: {'✅ DETECTED' if (settings.gmail_token_json or gmail_env) else '❌ MISSING (Set GMAIL_TOKEN_JSON)'}")
+    
+    # Check Telegram
+    logger.info(f"🤖 Telegram Bot: {'✅ CONFIGURED' if settings.telegram_bot_token else '❌ MISSING (Set TELEGRAM_BOT_TOKEN)'}")
+    
+    # Check LLM
+    logger.info(f"🧠 LLM API Key: {'✅ FOUND' if settings.groq_api_key else '❌ MISSING (Set GROQ_API_KEY)'}")
+    
+    logger.info("-------------------------------------")
+
 @app.get("/")
 async def root():
     """Root endpoint"""

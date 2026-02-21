@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     )
     google_sheets_credentials_json: Optional[str] = Field(
         default=None, 
-        env=["GOOGLE_SHEETS_CREDENTIALS_JSON", "SHEETS_JSON"]
+        env="SHEETS_JSON" # Simplified to one primary name for maximum compatibility
     )
     google_sheet_id: Optional[str] = Field(default=None, env="GOOGLE_SHEET_ID")
     
