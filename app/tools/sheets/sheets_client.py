@@ -30,7 +30,9 @@ class SheetsClient:
     def _get_client(self) -> gspread.Client:
         """Get or create gspread client"""
         if self._client is None:
-            # Try to load from environment variable first (Cloud-friendly)
+            import os
+            
+            # 1. Try to load from environment variable first (Cloud-friendly)
             if self.settings.google_sheets_credentials_json:
                 try:
                     creds_dict = json.loads(self.settings.google_sheets_credentials_json)
@@ -38,20 +40,31 @@ class SheetsClient:
                         creds_dict,
                         scopes=SCOPES,
                     )
-                    logger.info("Loaded Google Sheets credentials from environment variable")
+                    logger.info("✅ Loaded Google Sheets credentials from environment variable")
                 except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse credentials JSON from env: {e}")
-                    raise
-            else:
-                # Fallback to file path (Local development)
+                    logger.error(f"❌ Failed to parse credentials JSON from env: {e}")
+                    raise ValueError(f"Invalid GOOGLE_SHEETS_CREDENTIALS_JSON: {e}")
+            
+            # 2. Fallback to file path (Local development)
+            elif os.path.exists(self.settings.google_sheets_credentials_path):
                 creds = Credentials.from_service_account_file(
                     self.settings.google_sheets_credentials_path,
                     scopes=SCOPES,
                 )
-                logger.info(f"Loaded Google Sheets credentials from file: {self.settings.google_sheets_credentials_path}")
+                logger.info(f"✅ Loaded Google Sheets credentials from file: {self.settings.google_sheets_credentials_path}")
+            
+            # 3. No credentials found
+            else:
+                msg = (
+                    "❌ Google Sheets Credentials NOT FOUND.\n"
+                    "Please set GOOGLE_SHEETS_CREDENTIALS_JSON in Render or "
+                    f"add {self.settings.google_sheets_credentials_path} locally."
+                )
+                logger.error(msg)
+                raise ValueError(msg)
                 
             self._client = gspread.authorize(creds)
-            logger.info("Google Sheets client initialized")
+            logger.info("🚀 Google Sheets client initialized successfully")
         return self._client
     
     def _get_spreadsheet(self) -> gspread.Spreadsheet:
