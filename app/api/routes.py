@@ -335,3 +335,54 @@ async def get_workflow_state():
             "errors": _workflow_state.get("errors", []),
         }
     }
+
+
+# ============================================================
+# SUPERVISOR + MOBILE APP ENDPOINTS
+# ============================================================
+
+@router.get("/supervisor/status")
+async def supervisor_status():
+    """Get Supervisor Agent health report for all platforms"""
+    from app.agents.supervisor_agent import supervisor
+    return supervisor.get_health_report()
+
+
+@router.post("/supervisor/re-enable/{platform}")
+async def re_enable_platform(platform: str):
+    """Re-enable a disabled platform"""
+    from app.agents.supervisor_agent import supervisor
+    supervisor.re_enable_platform(platform)
+    return {"success": True, "message": f"{platform} re-enabled"}
+
+
+@router.get("/jobs/by-platform/{platform}")
+async def get_jobs_by_platform(platform: str):
+    """Get all tracked jobs filtered by platform (for mobile app)"""
+    try:
+        from app.agents.tracking import tracking_agent
+        all_apps = await tracking_agent.get_all_applications()
+        
+        filtered = [
+            {
+                "date": app.date,
+                "platform": app.platform,
+                "company": app.company,
+                "role": app.role,
+                "location": app.location,
+                "fit_score": app.fit_score,
+                "status": app.status.value,
+                "job_url": app.job_url,
+                "job_description": app.job_description,
+                "interview_prep": app.interview_prep,
+                "skills_to_learn": app.skills_to_learn,
+                "notes": app.notes,
+            }
+            for app in all_apps
+            if app.platform.lower() == platform.lower()
+        ]
+        
+        return {"platform": platform, "jobs": filtered, "count": len(filtered)}
+    except Exception as e:
+        logger.error(f"Jobs by platform error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
