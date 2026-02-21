@@ -35,15 +35,17 @@ class SheetsClient:
             # 1. Try to load from environment variable first (Cloud-friendly)
             if self.settings.google_sheets_credentials_json:
                 try:
-                    creds_dict = json.loads(self.settings.google_sheets_credentials_json)
+                    # Clean the JSON string (strip spaces/newlines)
+                    raw_json = self.settings.google_sheets_credentials_json.strip()
+                    creds_dict = json.loads(raw_json)
                     creds = Credentials.from_service_account_info(
                         creds_dict,
                         scopes=SCOPES,
                     )
-                    logger.info("✅ Loaded Google Sheets credentials from environment variable")
+                    logger.info("✅ Google Sheets: Loaded credentials from environment variable")
                 except json.JSONDecodeError as e:
-                    logger.error(f"❌ Failed to parse credentials JSON from env: {e}")
-                    raise ValueError(f"Invalid GOOGLE_SHEETS_CREDENTIALS_JSON: {e}")
+                    logger.error(f"❌ Google Sheets: JSON error in environment variable: {e}")
+                    raise ValueError(f"Invalid JSON in Google Sheets credentials: {e}")
             
             # 2. Fallback to file path (Local development)
             elif os.path.exists(self.settings.google_sheets_credentials_path):
