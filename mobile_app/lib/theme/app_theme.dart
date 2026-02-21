@@ -2,36 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  // Premium dark theme colors
-  static const Color primary = Color(0xFF6C63FF);
-  static const Color primaryLight = Color(0xFF8B85FF);
-  static const Color secondary = Color(0xFF00D9FF);
-  static const Color accent = Color(0xFFFF6584);
-  static const Color success = Color(0xFF00E676);
-  static const Color warning = Color(0xFFFFAB40);
-  static const Color error = Color(0xFFFF5252);
-  static const Color surface = Color(0xFF1E1E2E);
-  static const Color surfaceLight = Color(0xFF2A2A3E);
-  static const Color surfaceLighter = Color(0xFF353550);
-  static const Color background = Color(0xFF13131F);
-  static const Color textPrimary = Color(0xFFF5F5F5);
-  static const Color textSecondary = Color(0xFFA0A0B8);
+  // Obsidian Tech Theme Colors
+  static const Color primary = Color(0xFF00E5FF);    // Electric Cyan
+  static const Color secondary = Color(0xFF00FF9C);  // Emerald Tech
+  static const Color accent = Color(0xFF7000FF);     // Deep Electric Purple
+  static const Color success = Color(0xFF00F5A0);    // Neon Mint
+  static const Color warning = Color(0xFFFFB300);    // Amber
+  static const Color error = Color(0xFFFF3D00);      // Pure Red
+  
+  static const Color background = Color(0xFF0B0D15); // Deep Obsidian
+  static const Color surface = Color(0xFF161925);    // Dark Surface
+  static const Color surfaceLight = Color(0xFF212638);
+  static const Color surfaceLighter = Color(0xFF2D334D);
+  
+  static const Color textPrimary = Color(0xFFE0E6ED);
+  static const Color textSecondary = Color(0xFF94A3B8);
+  static const Color textMuted = Color(0xFF64748B);
 
-  // Platform-specific colors
+  // Platform-specific tech colors
   static Color platformColor(String platform) {
     switch (platform.toLowerCase()) {
       case 'linkedin':
-        return const Color(0xFF0A66C2);
+        return const Color(0xFF0077B5);
       case 'indeed':
         return const Color(0xFF2164F3);
       case 'naukri':
         return const Color(0xFF4A90D9);
       case 'hirist':
-        return const Color(0xFFE74C3C);
+        return const Color(0xFFFF4B2B);
       case 'glassdoor':
         return const Color(0xFF0CAA41);
       case 'wellfound':
-        return const Color(0xFFCC0066);
+        return const Color(0xFFFAFF00);
       default:
         return primary;
     }
@@ -39,20 +41,13 @@ class AppTheme {
 
   static String platformIcon(String platform) {
     switch (platform.toLowerCase()) {
-      case 'linkedin':
-        return '💼';
-      case 'indeed':
-        return '🔍';
-      case 'naukri':
-        return '🇮🇳';
-      case 'hirist':
-        return '🎯';
-      case 'glassdoor':
-        return '🚪';
-      case 'wellfound':
-        return '🚀';
-      default:
-        return '📋';
+      case 'linkedin': return '💼';
+      case 'indeed': return '🔍';
+      case 'naukri': return '🇮🇳';
+      case 'hirist': return '🎯';
+      case 'glassdoor': return '🚪';
+      case 'wellfound': return '🚀';
+      default: return '📋';
     }
   }
 
@@ -65,19 +60,22 @@ class AppTheme {
         primary: primary,
         secondary: secondary,
         surface: surface,
+        onSurface: textPrimary,
         error: error,
       ),
-      textTheme: GoogleFonts.interTextTheme(
+      textTheme: GoogleFonts.plusJakartaSansTextTheme(
         const TextTheme(
           headlineLarge: TextStyle(
             color: textPrimary,
-            fontWeight: FontWeight.bold,
-            fontSize: 28,
+            fontWeight: FontWeight.w800,
+            fontSize: 30,
+            letterSpacing: -0.5,
           ),
           headlineMedium: TextStyle(
             color: textPrimary,
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            fontSize: 24,
+            letterSpacing: -0.5,
           ),
           titleLarge: TextStyle(
             color: textPrimary,
@@ -89,31 +87,32 @@ class AppTheme {
             fontWeight: FontWeight.w500,
             fontSize: 16,
           ),
-          bodyLarge: TextStyle(color: textPrimary, fontSize: 16),
-          bodyMedium: TextStyle(color: textSecondary, fontSize: 14),
-          bodySmall: TextStyle(color: textSecondary, fontSize: 12),
+          bodyLarge: TextStyle(color: textPrimary, fontSize: 16, height: 1.5),
+          bodyMedium: TextStyle(color: textSecondary, fontSize: 14, height: 1.5),
+          bodySmall: TextStyle(color: textMuted, fontSize: 12),
         ),
       ),
-      appBarTheme: AppBarTheme(
-        backgroundColor: background,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: false,
-        titleTextStyle: GoogleFonts.inter(
-          color: textPrimary,
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-        ),
+        iconTheme: IconThemeData(color: textPrimary),
       ),
       cardTheme: CardThemeData(
         color: surface,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFF262C40), width: 1),
+        ),
       ),
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: surface,
-        indicatorColor: primary.withAlpha(50),
-        labelTextStyle: WidgetStateProperty.all(
-          GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: primary,
+          foregroundColor: background,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
     );

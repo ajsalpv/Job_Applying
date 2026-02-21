@@ -180,6 +180,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Request Logging Middleware
+@app.middleware("http")
+async def log_requests(request, call_next):
+    client_ip = request.client.host
+    path = request.url.path
+    method = request.method
+    logger.info(f"📥 Incoming: {method} {path} from {client_ip}")
+    response = await call_next(request)
+    logger.info(f"📤 Outgoing: {method} {path} -> {response.status_code}")
+    return response
+
 # Include API routes
 app.include_router(router, prefix="/api", tags=["Jobs"])
 
