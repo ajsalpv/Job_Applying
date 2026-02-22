@@ -141,6 +141,7 @@ class EmailSender:
                     sent_msg = service.users().messages().send(userId='me', body={'raw': raw_msg}).execute()
                     
                     logger.info(f"Email sent via Gmail API: {sent_msg['id']}")
+                    self._log_email(to_email, position_name)
                     return True, "Email sent successfully via Official Gmail API (Safe & Free)!"
 
             # --- METHOD 2: SMTP (Fallback for Local) ---
@@ -177,6 +178,7 @@ class EmailSender:
 
                     server.sendmail(self.email_address, to_email, smtp_msg.as_string())
                     server.quit()
+                    self._log_email(to_email, position_name)
                     return True, f"Email sent via SMTP ({self.smtp_server})"
                 except Exception as e:
                     if attempt < max_retries - 1:
@@ -190,5 +192,32 @@ class EmailSender:
             msg = f"Critical Error in Email Bot: {str(e)}"
             logger.error(msg)
             return False, msg
+
+    def _log_email(self, to_email: str, job_name: str):
+        """Log sent email to local JSON file for tracking"""
+        try:
+            from datetime import datetime
+            log_dir = "app/data"
+            os.makedirs(log_dir, exist_ok=True)
+            log_path = os.path.join(log_dir, "email_logs.json")
+            
+            logs = []
+            if os.path.exists(log_path):
+                with open(log_path, 'r') as f:
+                    logs = json.load(f)
+            
+            new_log = {
+                "recipient": to_email,
+                "job_name": job_name,
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "time": datetime.now().strftime("%H:%M:%S"),
+                "timestamp": datetime.now().isoformat()
+            }
+            logs.insert(0, new_log) # Newest first
+            
+            with open(log_path, 'w') as f:
+                json.dump(logs[:500], f, indent=2) # Keep last 500 logs
+        except Exception as e:
+            logger.error(f"Failed to log email: {e}")
 
 email_sender = EmailSender()

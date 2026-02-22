@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../theme/app_theme.dart';
 import '../services/api_service.dart';
+import 'email_logs_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -140,7 +141,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
           style: Theme.of(context).textTheme.bodyMedium,
         ),
         const SizedBox(height: 24),
-
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Your Activity',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            TextButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const EmailLogsScreen()),
+                );
+              },
+              icon: const Icon(Icons.history_edu_rounded, size: 18),
+              label: const Text('Email History'),
+              style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
         // Stats Grid
         _buildStatsGrid(),
         const SizedBox(height: 24),

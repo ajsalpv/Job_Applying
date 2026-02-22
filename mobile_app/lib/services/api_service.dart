@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static const String _baseUrl = 'https://job-applying-agent.onrender.com';
+  static const String _baseUrl = 'https://job-applying.onrender.com';
 
   static Future<String> getBaseUrl() async {
     // URL is now hardcoded for stability as requested
@@ -127,6 +127,40 @@ class ApiService {
     ).timeout(const Duration(seconds: 10));
     if (response.statusCode != 200) {
       throw Exception('Failed to update status: ${response.statusCode}');
+    }
+  }
+
+  static Future<bool> removeApplication(String company, String role) async {
+    try {
+      final base = await getBaseUrl();
+      final response = await http.post(
+        Uri.parse('$base/api/applications/remove'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'company': company,
+          'role': role,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('❌ [API] Error removing application: $e');
+      return false;
+    }
+  }
+
+  static Future<List<dynamic>> getEmailLogs() async {
+    try {
+      final base = await getBaseUrl();
+      final response = await http.get(Uri.parse('$base/api/email/logs'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['logs'] ?? [];
+      }
+      debugPrint('❌ [API] Server error getting email logs: ${response.statusCode}');
+      return [];
+    } catch (e) {
+      debugPrint('❌ [API] Error getting email logs: $e');
+      return [];
     }
   }
 

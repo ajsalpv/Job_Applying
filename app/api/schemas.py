@@ -46,6 +46,12 @@ class GenerateContentRequest(BaseModel):
     job_description: str
 
 
+class RemoveApplicationRequest(BaseModel):
+    """Request to remove an application"""
+    company: str
+    role: str
+
+
 # ============================================================
 # RESPONSE SCHEMAS
 # ============================================================
@@ -148,3 +154,18 @@ class SchedulerStatus(BaseModel):
     """Scheduler status response"""
     running: bool
     interval_minutes: float
+
+
+class EmailLogItem(BaseModel):
+    """Email log entry"""
+    recipient: str
+    job_name: str
+    date: str
+    time: str
+    timestamp: str
+
+
+class EmailLogResponse(BaseModel):
+    """List of email logs"""
+    logs: List[EmailLogItem]
+    count: int

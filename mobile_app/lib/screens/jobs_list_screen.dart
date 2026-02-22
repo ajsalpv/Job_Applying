@@ -181,6 +181,7 @@ class _JobsListScreenState extends State<JobsListScreen> {
         final job = jobs[index];
         return JobItemCard(
           job: job,
+          onRemove: () => _confirmRemove(job),
           onTap: () async {
             final result = await Navigator.push(
               context,
@@ -194,13 +195,63 @@ class _JobsListScreenState extends State<JobsListScreen> {
       },
     );
   }
+
+  Future<void> _confirmRemove(dynamic job) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: const Text('Remove Application?'),
+        content: Text('This will hide "${job['company']}" from your list.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove', style: TextStyle(color: AppTheme.error)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      if (!mounted) return;
+      final success = await ApiService.removeApplication(
+        job['company'].toString(),
+        job['role'].toString(),
+      );
+      
+      if (success) {
+        _loadJobs();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Application removed')),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to remove application')),
+          );
+        }
+      }
+    }
+  }
 }
 
 class JobItemCard extends StatelessWidget {
   final dynamic job;
   final VoidCallback onTap;
+  final VoidCallback onRemove;
 
-  const JobItemCard({super.key, required this.job, required this.onTap});
+  const JobItemCard({
+    super.key, 
+    required this.job, 
+    required this.onTap,
+    required this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -256,6 +307,14 @@ class JobItemCard extends StatelessWidget {
                         ),
                       ],
                     ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 20, color: AppTheme.textSecondary),
+                    onPressed: onRemove,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    visualDensity: VisualDensity.compact,
                   ),
                   const SizedBox(width: 8),
                   Container(

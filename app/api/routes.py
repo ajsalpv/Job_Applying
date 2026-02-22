@@ -20,6 +20,9 @@ from app.api.schemas import (
     JobApplicationItem,
     ApplicationListResponse,
     SchedulerStatus,
+    RemoveApplicationRequest,
+    EmailLogResponse,
+    EmailLogItem,
 )
 from app.orchestrator.state_manager import WorkflowState
 from app.orchestrator.scheduler import scheduler
@@ -120,6 +123,10 @@ async def get_all_applications():
         
         items = []
         for app in apps:
+            # Skip excluded applications
+            if app.status.value == "excluded":
+                continue
+                
             items.append(JobApplicationItem(
                 date=app.date,
                 platform=app.platform,
@@ -157,6 +164,44 @@ async def update_status(request: UpdateStatusRequest):
         return APIResponse(success=success, message="Status updated")
     except Exception as e:
         logger.error(f"Status update error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/applications/remove", response_model=APIResponse)
+async def remove_application(request: RemoveApplicationRequest):
+    """Remove application by marking it as excluded"""
+    try:
+        from app.agents.tracking import tracking_agent
+        from app.config.constants import ApplicationStatus
+        success = await tracking_agent.update_status(
+            company=request.company,
+            role=request.role,
+            new_status=ApplicationStatus.EXCLUDED.value,
+            notes="Removed by user from app",
+        )
+        return APIResponse(success=success, message="Application removed")
+    except Exception as e:
+        logger.error(f"Remove application error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/email/logs", response_model=EmailLogResponse)
+async def get_email_logs():
+    """Get history of sent emails"""
+    try:
+        import os
+        import json
+        log_path = "app/data/email_logs.json"
+        
+        if not os.path.exists(log_path):
+            return EmailLogResponse(logs=[], count=0)
+            
+        with open(log_path, 'r') as f:
+            logs = json.load(f)
+            
+        return EmailLogResponse(logs=[EmailLogItem(**log) for log in logs], count=len(logs))
+    except Exception as e:
+        logger.error(f"Get email logs error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

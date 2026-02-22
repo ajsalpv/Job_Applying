@@ -29,6 +29,7 @@ class ApplicationStatus(str, Enum):
     REJECTED = "rejected"
     NO_RESPONSE = "no_response"
     OFFER = "offer"
+    EXCLUDED = "excluded"
 
 
 class AgentType(str, Enum):

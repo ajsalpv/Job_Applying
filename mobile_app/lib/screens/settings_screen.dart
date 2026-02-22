@@ -150,14 +150,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       label: 'Target Locations',
                       icon: Icons.location_on_rounded,
                       hint: 'Bangalore, Remote, etc.',
+                      onChanged: (_) => setState(() {}),
                     ),
+                    const SizedBox(height: 8),
+                    _buildChips(_locationController.text),
                     const SizedBox(height: 24),
                     _buildTextField(
                       controller: _rolesController,
                       label: 'Target Roles',
                       icon: Icons.work_rounded,
                       hint: 'AI Engineer, ML Engineer',
+                      onChanged: (_) => setState(() {}),
                     ),
+                    const SizedBox(height: 8),
+                    _buildChips(_rolesController.text),
                     const SizedBox(height: 32),
                     const Text(
                       'Experience required (Years)',
@@ -208,7 +214,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 20),
               const Center(
                 child: Text(
-                  'Connected to: job-applying-agent.onrender.com',
+                  'Connected to: job-applying.onrender.com',
                   style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
                 ),
               ),
@@ -245,14 +251,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildChips(String text) {
+    if (text.isEmpty) return const SizedBox.shrink();
+    final items = text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: items.map((item) => Chip(
+        label: Text(item, style: const TextStyle(fontSize: 10, color: AppTheme.textPrimary)),
+        backgroundColor: AppTheme.primary.withAlpha(20),
+        side: BorderSide(color: AppTheme.primary.withAlpha(40)),
+        padding: EdgeInsets.zero,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      )).toList(),
+    );
+  }
+
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
     required IconData icon,
     required String hint,
+    ValueChanged<String>? onChanged,
   }) {
     return TextField(
       controller: controller,
+      onChanged: onChanged,
       style: const TextStyle(color: AppTheme.textPrimary),
       decoration: InputDecoration(
         labelText: label,

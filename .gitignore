@@ -56,4 +56,4 @@ mobile_app/android/app/src/main/res/values/public.xml
 # Local Data
 app/data/seen_urls.json
 app/data/dynamic_settings.json
-仗
+app/data/email_logs.json
