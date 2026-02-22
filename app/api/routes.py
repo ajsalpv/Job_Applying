@@ -118,36 +118,41 @@ async def get_all_applications():
         
         # Determine sort key - prefer date and potentially time if available
         # JobApplication objects have 'date' (YYYY-MM-DD)
-        # Sort descending
-        apps.sort(key=lambda x: x.date, reverse=True)
+        try:
+            apps.sort(key=lambda x: str(x.date) if hasattr(x, 'date') else "", reverse=True)
+        except Exception as e:
+            logger.warning(f"Sort failed: {e}")
         
         items = []
         for app in apps:
             # Skip excluded applications
-            if app.status.value == "excluded":
-                continue
+            try:
+                if hasattr(app, 'status') and hasattr(app.status, 'value') and app.status.value == "excluded":
+                    continue
                 
-            items.append(JobApplicationItem(
-                date=app.date,
-                platform=app.platform,
-                company=app.company,
-                role=app.role,
-                location=app.location,
-                fit_score=app.fit_score,
-                status=app.status.value,
-                job_url=app.job_url,
-                job_description=app.job_description,
-                interview_prep=app.interview_prep,
-                skills_to_learn=app.skills_to_learn,
-                posted_at=app.posted_at,
-                applied_at=app.applied_at,
-                notes=app.notes,
-            ))
+                items.append(JobApplicationItem(
+                    date=app.date,
+                    platform=app.platform,
+                    company=app.company,
+                    role=app.role,
+                    location=app.location,
+                    fit_score=app.fit_score,
+                    status=app.status.value if hasattr(app.status, 'value') else str(app.status),
+                    job_url=app.job_url,
+                    job_description=app.job_description,
+                    interview_prep=app.interview_prep,
+                    skills_to_learn=app.skills_to_learn,
+                    posted_at=app.posted_at,
+                    applied_at=app.applied_at,
+                    notes=app.notes,
+                ))
+            except Exception as e:
+                logger.warning(f"Failed to convert app to item: {e}")
             
         return ApplicationListResponse(applications=items, count=len(items))
     except Exception as e:
         logger.error(f"Get applications error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Data error: {str(e)}")
 
 
 @router.post("/applications/status", response_model=APIResponse)
@@ -196,10 +201,27 @@ async def get_email_logs():
         if not os.path.exists(log_path):
             return EmailLogResponse(logs=[], count=0)
             
-        with open(log_path, 'r') as f:
-            logs = json.load(f)
+        try:
+            with open(log_path, 'r') as f:
+                logs = json.load(f)
             
-        return EmailLogResponse(logs=[EmailLogItem(**log) for log in logs], count=len(logs))
+            if not isinstance(logs, list):
+                logger.warning(f"Email logs file is not a list: {type(logs)}")
+                return EmailLogResponse(logs=[], count=0)
+                
+            # Filter and validate items
+            valid_logs = []
+            for item in logs:
+                if isinstance(item, dict):
+                    try:
+                        valid_logs.append(EmailLogItem(**item))
+                    except:
+                        continue
+            
+            return EmailLogResponse(logs=valid_logs, count=len(valid_logs))
+        except (json.JSONDecodeError, IOError) as e:
+            logger.error(f"Failed to read/parse email logs: {e}")
+            return EmailLogResponse(logs=[], count=0)
     except Exception as e:
         logger.error(f"Get email logs error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -101,15 +101,11 @@ class Settings(BaseSettings):
         }
         
         try:
-            from app.tools.utils.logger import get_logger
-            logger = get_logger("settings")
             with open(settings_path, 'w') as f:
                 json.dump(dynamic_data, f, indent=2)
-            logger.info(f"✅ Dynamic settings saved to {settings_path}")
+            print(f"💎 [SETTINGS] Dynamic settings saved to {settings_path}")
         except Exception as e:
-            from app.tools.utils.logger import get_logger
-            logger = get_logger("settings")
-            logger.error(f"❌ Failed to save dynamic settings: {e}")
+            print(f"⚠️ [SETTINGS] Failed to save dynamic settings: {e}")
 
     @classmethod
     def load_dynamic_settings(cls):
@@ -120,9 +116,7 @@ class Settings(BaseSettings):
                 with open(settings_path, 'r') as f:
                     return json.load(f)
             except Exception as e:
-                from app.tools.utils.logger import get_logger
-                logger = get_logger("settings")
-                logger.error(f"❌ Failed to load dynamic settings: {e}")
+                print(f"⚠️ [SETTINGS] Failed to load dynamic settings: {e}")
         return {}
 
 

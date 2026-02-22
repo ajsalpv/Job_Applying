@@ -62,6 +62,20 @@ class JobApplication(BaseModel):
     @classmethod
     def from_row(cls, row: List[str]) -> "JobApplication":
         """Create from Google Sheets row"""
+        # Parsing status with robustness (case-insensitive, default to DISCOVERED)
+        sheet_status = row[7].lower().strip() if len(row) > 7 and row[7] else ""
+        try:
+            status = ApplicationStatus(sheet_status)
+        except ValueError:
+            # Fallback for manual sheet edits or legacy values
+            status_map = {
+                "in_progress": ApplicationStatus.APPLIED,
+                "interviewing": ApplicationStatus.INTERVIEW,
+                "offered": ApplicationStatus.OFFER,
+                "archived": ApplicationStatus.EXCLUDED,
+            }
+            status = status_map.get(sheet_status, ApplicationStatus.DISCOVERED)
+
         return cls(
             date=row[0] if len(row) > 0 else "",
             platform=row[1] if len(row) > 1 else "",
@@ -70,7 +84,7 @@ class JobApplication(BaseModel):
             location=row[4] if len(row) > 4 else "",
             experience_required=row[5] if len(row) > 5 else "",
             fit_score=int(row[6]) if len(row) > 6 and row[6].isdigit() else 0,
-            status=ApplicationStatus(row[7]) if len(row) > 7 else ApplicationStatus.DISCOVERED,
+            status=status,
             job_url=row[8] if len(row) > 8 else "",
             job_description=row[9] if len(row) > 9 else "",
             interview_prep=row[10] if len(row) > 10 else "",
