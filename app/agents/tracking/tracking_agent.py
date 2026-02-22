@@ -11,7 +11,8 @@ from langgraph.prebuilt import create_react_agent
 from app.agents.base_agent import LangGraphAgent, AgentResult
 from app.config.constants import ApplicationStatus, SHEETS_COLUMNS
 from app.config.settings import get_settings
-from app.tools.sheets import sheets_client, JobApplication, FollowUp
+from app.tools.sheets.sheets_client import sheets_client
+from app.tools.sheets.schema import JobApplication, FollowUp
 from app.tools.utils.logger import get_logger
 from app.tools.notifications.telegram_notifier import notifier
 
